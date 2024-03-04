@@ -1,14 +1,5 @@
 #!/usr/bin/python3
 # -*- encoding: utf-8 -*-
-"""
-@File :  backbone.py
-@Time :  2023/09/13 21:22:20
-@Author :  Jia-Run Du
-@Version :  1.0
-@Contact :  dujr6@mail2.sysu.edu.cn
-@License :  Copyright (c) ISEE Lab
-@Desc :  modify the backbone of Conditional DETR as Temporal 1D Convlution
-"""
 
 
 """

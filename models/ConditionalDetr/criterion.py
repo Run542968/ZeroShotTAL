@@ -53,25 +53,13 @@ class SetCriterion(nn.Module):
         self.weight_dict = weight_dict
         self.focal_alpha = focal_alpha
         self.gamma = args.gamma
+        self.target_type = args.target_type
 
         self.actionness_loss = args.actionness_loss 
-        self.eval_proposal = args.eval_proposal
-        self.enable_classAgnostic = args.enable_classAgnostic
 
-        self.salient_loss = args.salient_loss
-        self.salient_loss_impl = args.salient_loss_impl
-        self.adapterCLS_loss = args.adapterCLS_loss
-        self.adapterCLS_type = args.adapterCLS_type
-        self.adapterCLS_conv_weight_type = args.adapterCLS_conv_weight_type
-
-        self.refine_actionness_loss = args.refine_actionness_loss
         self.distillation_loss = args.distillation_loss
-        if self.refine_actionness_loss:
-            self.refine_losses = ['boxes_refine','actionness_refine']
 
-        if self.eval_proposal or self.enable_classAgnostic:
-            self.base_losses = ['boxes','actionness']
-        elif self.actionness_loss:
+        if self.actionness_loss:
             self.base_losses = ['labels','actionness','boxes']
         else:
             self.base_losses = ['labels', 'boxes']
@@ -102,32 +90,6 @@ class SetCriterion(nn.Module):
             losses['class_error'] = 100 - accuracy(src_logits[idx], target_classes_o)[0] # [batch_matched_queries,num_classes]
         return losses
 
-    def loss_complete_labels(self, outputs, targets, indices, num_boxes, log=True):
-        """
-        Modify the loss_labels, consider the complete of proposal semantic, introding the bg instance in matching stage
-        """
-        assert 'class_logits' in outputs
-        src_logits = outputs['class_logits'] # [bs,num_queries,num_classes+1]
-
-        idx = self._get_src_permutation_idx(indices) # (batch_idx,src_idx)
-        target_classes_o = torch.cat([t["semantic_labels"][J] for t, (_, J) in zip(targets, indices)]) # [batch_target_class_id]
-        target_classes = torch.full(src_logits.shape[:2], src_logits.shape[2]-1,
-                                    dtype=torch.int64, device=src_logits.device) # [bs,num_queries]
-        target_classes[idx] = target_classes_o # [bs,num_queries]
-
-        target_classes_onehot = torch.zeros([src_logits.shape[0], src_logits.shape[1], src_logits.shape[2]],
-                                            dtype=src_logits.dtype, layout=src_logits.layout, device=src_logits.device) # [bs,num_queries,num_classes+1]
-        target_classes_onehot.scatter_(2, target_classes.unsqueeze(-1), 1)
-
-
-        complete_classes_onehot = target_classes_onehot[idx] # [batch_matched_queries,num_classes+1]
-        complete_logits = src_logits[idx] # [batch_matched_queries,num_classes+1]
-
-        loss_ce = sigmoid_focal_loss(complete_logits, complete_classes_onehot, num_boxes, alpha=self.focal_alpha, gamma=self.gamma)
-        losses = {'loss_ce': loss_ce}
-
-        return losses
-
     def loss_boxes(self, outputs, targets, indices, num_boxes):
         """Compute the losses related to the bounding boxes, the L1 regression loss and the GIoU loss
            targets dicts must contain the key "segments" containing a tensor of dim [nb_target_boxes, 4]
@@ -149,236 +111,6 @@ class SetCriterion(nn.Module):
         losses['loss_giou'] = loss_giou.sum() / num_boxes
         return losses
 
-    def loss_boxes_refine(self, outputs, targets, indices, num_boxes):
-        """Compute the losses related to the bounding boxes, the L1 regression loss and the GIoU loss
-           targets dicts must contain the key "segments" containing a tensor of dim [nb_target_boxes, 4]
-           The target boxes are expected in format (center_x, center_y, w, h), normalized by the image size.
-        """
-        assert 'pred_boxes' in outputs
-        idx = self._get_src_permutation_idx(indices) # (batch_idx,src_idx)
-        src_boxes = outputs['pred_boxes'][idx] # [batch_matched_queries,2]
-        target_boxes = torch.cat([t['segments'][i] for t, (_, i) in zip(targets, indices)], dim=0) # [batch_target,2]
-
-        loss_bbox = F.l1_loss(src_boxes, target_boxes, reduction='none')
-
-        losses = {}
-        losses['loss_bbox_refine'] = loss_bbox.sum() / num_boxes
-
-        loss_giou = 1 - torch.diag(segment_iou(
-            segment_cw_to_t1t2(src_boxes).clamp(min=0,max=1), 
-            segment_cw_to_t1t2(target_boxes))) # the clamp is to deal with the case "center"-"width/2" < 0 and "center"+"width/2" < 1
-        losses['loss_giou'] = loss_giou.sum() / num_boxes
-        return losses
-
-
-    def loss_exclusive(self, outputs, targets, indices, num_boxes):
-        """Compute the losses related to the bounding boxes, the L1 regression loss and the GIoU loss
-           targets dicts must contain the key "segments" containing a tensor of dim [nb_target_boxes, 4]
-           The target boxes are expected in format (center_x, center_y, w, h), normalized by the image size.
-        """
-        assert 'pred_boxes' in outputs
-
-        matched2all_iou_list = []
-        for batch_id, (query_id_list,_) in enumerate(indices):
-            batch_pred_boxes = outputs['pred_boxes'][batch_id] # [num_query,2]
-            batch_iou = segment_iou(
-            segment_cw_to_t1t2(batch_pred_boxes).clamp(min=0,max=1), 
-            segment_cw_to_t1t2(batch_pred_boxes).clamp(min=0,max=1)
-            ) # [num_query,num_query]
-            diag = torch.diag(batch_iou)
-            a_diag = torch.diag_embed(diag)
-            batch_iou = batch_iou - a_diag
-
-            matched2all_iou = batch_iou[query_id_list] # [matched_query,num_query]
-            matched2all_iou_list.append(matched2all_iou)
-
-        batch_matched2all_iou = torch.cat(matched2all_iou_list,dim=0) # [batch_matched2all, num_query]
-        loss_exclusive = batch_matched2all_iou.mean()
-        losses = {}
-        losses['loss_exclusive'] = loss_exclusive
-        return losses
-
-    def loss_exclusive_v2(self, outputs, targets, indices, num_boxes):
-        """Compute the losses related to the bounding boxes, the L1 regression loss and the GIoU loss
-           targets dicts must contain the key "segments" containing a tensor of dim [nb_target_boxes, 4]
-           The target boxes are expected in format (center_x, center_y, w, h), normalized by the image size.
-        """
-        assert 'pred_boxes' in outputs
-
-        all_iou_list = []
-        for batch_id, (query_id_list,_) in enumerate(indices):
-            batch_pred_boxes = outputs['pred_boxes'][batch_id] # [num_query,2]
-            batch_iou = segment_iou(
-            segment_cw_to_t1t2(batch_pred_boxes).clamp(min=0,max=1), 
-            segment_cw_to_t1t2(batch_pred_boxes).clamp(min=0,max=1)
-            ) # [num_query,num_query]
-            diag = torch.diag(batch_iou)
-            a_diag = torch.diag_embed(diag)
-            batch_iou = batch_iou - a_diag
-
-            all_iou_list.append(batch_iou)
-
-        all_iou_list = torch.cat(all_iou_list,dim=0) # [all_iou_list, num_query]
-        loss_exclusive = all_iou_list.mean()
-        losses = {}
-        losses['loss_exclusive'] = 0.5*loss_exclusive
-        return losses
-
-    def loss_segmentations(self,outputs, targets, indices, num_boxes):
-        '''
-        for dense prediction, which is like to maskformer, the loss compute on the memory of the output of encoder
-        segmentation_logits: the output of segmentation_logits => [B,T,num_classes]
-        feature_list: the feature list after backbone for temporal modeling => list[NestedTensor]
-        '''
-        # assert 'segmentation_logits' in outputs
-        # assert 'segmentation_onehot_labels' in targets[0]
-
-        # # obtain logits
-        # segmentation_logits = outputs['segmentation_logits'] # [B,T,num_classes]
-        # B,T,C = segmentation_logits.shape
-
-        # # prepare labels
-        # segmentation_onehot_labels_pad = torch.zeros_like(segmentation_logits) # [B,T,num_classes], zero in padding region
-        # for i, tgt in enumerate(targets):
-        #     feat_length = tgt['segmentation_onehot_labels'].shape[0]
-        #     segmentation_onehot_labels_pad[i,:feat_length,:] = tgt['segmentation_onehot_labels'] # [feat_length, num_classes]
-
-        # ce_loss = -(segmentation_onehot_labels_pad * F.log_softmax(segmentation_logits, dim=-1)).sum(dim=-1)
-
-        # losses = {}
-        # losses['loss_segmentation'] = ce_loss.sum(-1).sum() / B
-
-        assert 'segmentation_logits' in outputs
-        assert 'segmentation_labels' in targets[0]
-        assert 'logits_mask' in outputs
-
-        # obtain logits
-        segmentation_logits = outputs['segmentation_logits'] # [B,T,num_classes+1]
-        B,T,C = segmentation_logits.shape
-
-        # prepare labels
-        segmentation_labels_pad = torch.full(segmentation_logits.shape[:2], segmentation_logits.shape[2]-1, dtype=torch.int64, device=segmentation_logits.device) # [B,T]
-        for i, tgt in enumerate(targets):
-            feat_length = tgt['segmentation_labels'].shape[0]
-            segmentation_labels_pad[i,:feat_length] = tgt['segmentation_labels'] # [feat_length]
-
-        target_classes_onehot = torch.zeros_like(segmentation_logits) # [bs,T,num_classes+1]
-        target_classes_onehot.scatter_(2, segmentation_labels_pad.unsqueeze(-1), 1)
-        
-
-        prob = segmentation_logits.sigmoid() # [batch_instance_num,num_classes]
-        ce_loss = F.binary_cross_entropy_with_logits(segmentation_logits, target_classes_onehot, reduction="none")
-        p_t = prob * target_classes_onehot + (1 - prob) * (1 - target_classes_onehot) # [bs,T,num_classes+1]
-        loss = ce_loss * ((1 - p_t) ** 2)
-        alpha = 0.25
-        if alpha >= 0:
-            alpha_t = alpha * target_classes_onehot + (1 - alpha) * (1 - target_classes_onehot)
-            loss = alpha_t * loss
-
-        logits_mask = ~outputs['logits_mask'] # covert False to 1
-        loss = torch.einsum("btc,bt->btc",loss,logits_mask) # [b,t,c+1]
-
-        losses = {}
-        losses['loss_segmentation'] = loss.sum(-1).mean()
-        return losses
-
-    def loss_instances(self,outputs, targets, indices, num_boxes):
-        '''
-        for instance prediction, modeling the relation of instance region and text 
-        instance_logits: the output of instance_logits => [batch_instance_num,num_classes]
-        '''
-        assert 'instance_logits' in outputs
- 
-        # obtain logits
-        instance_logits = outputs['instance_logits'] #[batch_instance_num,num_classes]
-        B,C = instance_logits.shape
-
-        instance_gt = [] 
-        for t in targets:
-            gt_labels = t['labels'] # [num_instance]
-            instance_gt.append(gt_labels)
-        instance_gt = torch.cat(instance_gt,dim=0) # [batch_instance_num]->"class id"
-        
-        # prepare labels
-        target_classes_onehot = torch.zeros_like(instance_logits) # [batch_instance_num,num_classes]
-        target_classes_onehot.scatter_(1, instance_gt.reshape(-1,1), 1) # [batch_instance_num,num_classes]
-
-        if self.instance_loss_type == "CE":
-            loss = -(target_classes_onehot * F.log_softmax(instance_logits, dim=-1)).sum(dim=-1)
-        elif self.instance_loss_type == "BCE":
-            prob = instance_logits.sigmoid() # [batch_instance_num,num_classes]
-            ce_loss = F.binary_cross_entropy_with_logits(instance_logits, target_classes_onehot, reduction="none")
-            p_t = prob * target_classes_onehot + (1 - prob) * (1 - target_classes_onehot) # [bs,num_queries,num_classes]
-            loss = ce_loss * ((1 - p_t) ** 2)
-            alpha = 0.25
-            if alpha >= 0:
-                alpha_t = alpha * target_classes_onehot + (1 - alpha) * (1 - target_classes_onehot)
-                loss = alpha_t * loss
-        else:
-            raise ValueError
-        losses = {}
-        losses['loss_instance'] = loss.mean()
-        return losses
-
-    def loss_matching(self,outputs, targets, indices, num_boxes):
-        '''
-        for instance prediction, modeling the relation of instance region and text 
-        matching_logits: the output of matching_logits => [batch_instance_num,num_classes]
-        '''
-        assert 'matching_logits' in outputs
- 
-        # obtain logits
-        matching_logits = outputs['matching_logits'] #[batch_instance_num,num_classes]
-        B,C = matching_logits.shape
-
-        instance_gt = [] 
-        for t in targets:
-            gt_labels = t['labels'] # [num_instance]
-            instance_gt.append(gt_labels)
-        instance_gt = torch.cat(instance_gt,dim=0) # [batch_instance_num]->"class id"
-        
-        # prepare labels
-        target_classes_onehot = torch.zeros_like(matching_logits) # [batch_instance_num,num_classes]
-        target_classes_onehot.scatter_(1, instance_gt.reshape(-1,1), 1) # [batch_instance_num,num_classes]
-
-        prob = matching_logits.sigmoid() # [batch_instance_num,num_classes]
-        ce_loss = F.binary_cross_entropy_with_logits(matching_logits, target_classes_onehot, reduction="none")
-        p_t = prob * target_classes_onehot + (1 - prob) * (1 - target_classes_onehot) # [bs,num_queries,num_classes]
-        loss = ce_loss * ((1 - p_t) ** 2)
-        alpha = 0.25
-        if alpha >= 0:
-            alpha_t = alpha * target_classes_onehot + (1 - alpha) * (1 - target_classes_onehot)
-            loss = alpha_t * loss
-
-        losses = {}
-        losses['loss_matching'] = loss.mean()
-        return losses
-
-    def loss_mask(self,outputs, targets, indices, num_boxes):
-        '''
-        for dense prediction, which is like to maskformer, the loss compute on the memory of the output of encoder
-        mask_logits: the output of mask_logits => [B,T,num_classes]
-        feature_list: the feature list after backbone for temporal modeling => list[NestedTensor]
-        '''
-        assert 'mask_logits' in outputs
-        assert 'mask_labels' in targets[0]
-
-        # obtain logits
-        mask_logits = outputs['mask_logits'].squeeze(2) # [B,T,1]->[B,T]
-        B,T= mask_logits.shape
-
-        # prepare labels
-        mask_labels_pad = torch.zeros_like(mask_logits) # [B,T], zero in padding region
-        for i, tgt in enumerate(targets):
-            feat_length = tgt['mask_labels'].shape[0]
-            mask_labels_pad[i,:feat_length] = tgt['mask_labels'] # [feat_length]
-
-        ce_loss = F.binary_cross_entropy_with_logits(mask_logits, mask_labels_pad, reduction="none").sum(-1) # [B,T]
-
-        losses = {}
-        losses['loss_mask'] = ce_loss.sum() / B
-        return losses
-    
     def loss_distillation(self,outputs, targets, indices, num_boxes):
         '''
         for distillation the CLIP feat to DETR detector
@@ -422,310 +154,6 @@ class SetCriterion(nn.Module):
             losses['class_error'] = 100 - accuracy(src_logits[idx], target_classes_o)[0] # [batch_matched_queries,num_classes]
         return losses
 
-    def loss_actionness_refine(self, outputs, targets, indices, num_boxes, log=True):
-        """Classification loss (Binary focal loss)
-        targets dicts must contain the key "labels" containing a tensor of dim [nb_target_boxes]
-        """
-        assert 'actionness_logits' in outputs
-        src_logits = outputs['actionness_logits'] # [bs,num_queries,1]
-
-        idx = self._get_src_permutation_idx(indices) # (batch_idx,src_idx)
-        target_classes_o = torch.cat([t["labels"][J] for t, (_, J) in zip(targets, indices)]) # [batch_target_class_id]
-        target_classes = torch.full(src_logits.shape[:2], src_logits.shape[2],
-                                    dtype=torch.int64, device=src_logits.device) # [bs,num_queries]
-        target_classes[idx] = target_classes_o # [bs,num_queries]
-
-        target_classes_onehot = torch.zeros([src_logits.shape[0], src_logits.shape[1], src_logits.shape[2]+1],
-                                            dtype=src_logits.dtype, layout=src_logits.layout, device=src_logits.device) # [bs,num_queries,num_classes+1]
-        target_classes_onehot.scatter_(2, target_classes.unsqueeze(-1), 1)
-
-        target_classes_onehot = target_classes_onehot[:,:,:-1] # [bs,num_queries,num_classes]
-        loss_ce = sigmoid_focal_loss(src_logits, target_classes_onehot, num_boxes, alpha=self.focal_alpha, gamma=self.gamma) * src_logits.shape[1]
-        losses = {'loss_actionness_refine': loss_ce}
-
-        if log:
-            # TODO this should probably be a separate loss, not hacked in this one here
-            losses['class_error'] = 100 - accuracy(src_logits[idx], target_classes_o)[0] # [batch_matched_queries,num_classes]
-        return losses
-
-
-    def loss_refine_actionness(self, outputs, targets, indices, num_boxes, log=True):
-        """Classification loss (Binary focal loss)
-        targets dicts must contain the key "labels" containing a tensor of dim [nb_target_boxes]
-        """
-        assert 'actionness_logits' in outputs
-        src_logits = outputs['actionness_logits'] # [bs,num_queries,1]
-
-        idx = self._get_src_permutation_idx(indices) # (batch_idx,src_idx)
-        target_classes_o = torch.cat([t["labels"][J] for t, (_, J) in zip(targets, indices)]) # [batch_target_class_id]
-        target_classes = torch.full(src_logits.shape[:2], src_logits.shape[2],
-                                    dtype=torch.int64, device=src_logits.device) # [bs,num_queries]
-        target_classes[idx] = target_classes_o # [bs,num_queries]
-
-        target_classes_onehot = torch.zeros([src_logits.shape[0], src_logits.shape[1], src_logits.shape[2]+1],
-                                            dtype=src_logits.dtype, layout=src_logits.layout, device=src_logits.device) # [bs,num_queries,num_classes+1]
-        target_classes_onehot.scatter_(2, target_classes.unsqueeze(-1), 1)
-
-        target_classes_onehot = target_classes_onehot[:,:,:-1] # [bs,num_queries,num_classes]
-        loss_ce = sigmoid_focal_loss(src_logits, target_classes_onehot, num_boxes, alpha=self.focal_alpha, gamma=self.gamma) * src_logits.shape[1]
-        losses = {'loss_refine_actionness': loss_ce}
-
-        return losses
-
-    def loss_refine_boxes(self, outputs, targets, indices, num_boxes):
-        """Compute the losses related to the bounding boxes, the L1 regression loss and the GIoU loss
-           targets dicts must contain the key "segments" containing a tensor of dim [nb_target_boxes, 4]
-           The target boxes are expected in format (center_x, center_y, w, h), normalized by the image size.
-        """
-        assert 'pred_boxes' in outputs
-        idx = self._get_src_permutation_idx(indices) # (batch_idx,src_idx)
-        src_boxes = outputs['pred_boxes'][idx] # [batch_matched_queries,2]
-        target_boxes = torch.cat([t['segments'][i] for t, (_, i) in zip(targets, indices)], dim=0) # [batch_target,2]
-
-        loss_bbox = F.l1_loss(src_boxes, target_boxes, reduction='none')
-
-        losses = {}
-        losses['loss_refine_bbox'] = loss_bbox.sum() / num_boxes
-
-        loss_giou = 1 - torch.diag(segment_iou(
-            segment_cw_to_t1t2(src_boxes).clamp(min=0,max=1), 
-            segment_cw_to_t1t2(target_boxes))) # the clamp is to deal with the case "center"-"width/2" < 0 and "center"+"width/2" < 1
-        losses['loss_refine_giou'] = loss_giou.sum() / num_boxes
-        return losses
-
-    def loss_complete_actionness(self, outputs, targets, indices, num_boxes, log=True):
-        """Classification loss (Binary focal loss)
-        targets dicts must contain the key "labels" containing a tensor of dim [nb_target_boxes]
-        """
-        assert 'actionness_logits' in outputs
-        src_logits = outputs['actionness_logits'] # [bs,num_queries,2]
-
-        idx = self._get_src_permutation_idx(indices) # (batch_idx,src_idx)
-        target_classes_o = torch.cat([t["labels"][J] for t, (_, J) in zip(targets, indices)]) # [batch_target_class_id]
-        target_classes = torch.full(src_logits.shape[:2], src_logits.shape[2]-1,
-                                    dtype=torch.int64, device=src_logits.device) # [bs,num_queries]
-        target_classes[idx] = target_classes_o # [bs,num_queries]
-
-        target_classes_onehot = torch.zeros([src_logits.shape[0], src_logits.shape[1], src_logits.shape[2]],
-                                            dtype=src_logits.dtype, layout=src_logits.layout, device=src_logits.device) # [bs,num_queries,num_classes+1]
-        target_classes_onehot.scatter_(2, target_classes.unsqueeze(-1), 1)
-
-        # complete_classes_onehot = target_classes_onehot[idx] # [batch_matched_queries,num_classes+1]
-        # complete_logits = src_logits[idx] # [batch_matched_queries,num_classes+1]
-
-        # loss_ce = sigmoid_focal_loss(complete_logits, complete_classes_onehot, num_boxes, alpha=self.focal_alpha, gamma=self.gamma)
-        # losses = {'loss_actionness': loss_ce}
-        
-        target_classes_onehot = target_classes_onehot[:,:,:] # [bs,num_queries,num_classes]
-        loss_ce = sigmoid_focal_loss(src_logits, target_classes_onehot, num_boxes, alpha=self.focal_alpha, gamma=self.gamma) * src_logits.shape[1]
-        losses = {'loss_actionness': loss_ce}
-
-        return losses
-
-    def loss_text_distillation(self, outputs, targets, indices, num_boxes, log=True):
-        """Classification loss (Binary focal loss)
-        targets dicts must contain the key "labels" containing a tensor of dim [nb_target_boxes]
-        """
-        assert 'query_feats' in outputs
-        query_feats = outputs['query_feats'] # [bs,num_queries,num_classes]
-        assert 'text_feats' in outputs
-        text_feats = outputs['text_feats'] # [num_classes,dim]
-
-        text_feats = text_feats / text_feats.norm(dim=-1,keepdim=True)
-        query_feats = query_feats / query_feats.norm(dim=-1,keepdim=True)
-
-        idx = self._get_src_permutation_idx(indices) # (batch_idx,src_idx)
-        target_classes_o = torch.cat([t["semantic_labels"][J] for t, (_, J) in zip(targets, indices)]) # [batch_target_class_id]
-        matched_text_feats = text_feats[target_classes_o,:] # [batch_target_class_id,dim]
-        matched_query_feats = query_feats[idx] # [batch_target_class_id,dim]
-
-        text_relation_matrix = torch.einsum("bd,nd->bn",matched_text_feats,text_feats)
-        query_text_relation_matrix = torch.einsum("bd,nd->bn",matched_query_feats,text_feats)
-
-        distill_loss = F.kl_div(torch.log_softmax(query_text_relation_matrix / 0.07, dim=1),
-                                torch.softmax(text_relation_matrix / 0.07, dim=1),
-                                reduction="batchmean")
-
-
-        losses = {'loss_text_distillation': distill_loss}
-
-
-        return losses
-
-    def loss_queryRelation(self, outputs, targets, indices, num_boxes, log=True):
-        """Classification loss (Binary focal loss)
-        targets dicts must contain the key "labels" containing a tensor of dim [nb_target_boxes]
-        """
-        assert 'ROI_relation' in outputs
-        ROI_relation = outputs['ROI_relation'] # [bs*q,bs*q]
-        assert 'query_relation' in outputs
-        query_relation = outputs['query_relation'] # [bs*q,bs*q]
-
-        queryRelation_loss = F.l1_loss(query_relation,ROI_relation)
-
-
-        losses = {'loss_queryRelation': queryRelation_loss}
-
-        return losses
-
-    def loss_rank(self, outputs, targets, indices, num_boxes, log=True):
-        """
-            Rank loss, for fine-grained boundary perception
-            NOTE: If the num_queries is so small, can not cover all gt, an error will appear here
-        """
-        def rank_loss(center_logits, inner_logits, outer_logits, margin=0.3):
-            # 计算 pairwise ranking loss
-            center_logits = center_logits.sigmoid()
-            inner_logits = inner_logits.sigmoid()
-            outer_logits = outer_logits.sigmoid()
-
-            loss = torch.relu(margin + inner_logits - center_logits) + torch.relu(margin + outer_logits - inner_logits)
-            return loss.mean()
-        
-        assert 'actionness_logits' in outputs
-        src_logits = outputs['actionness_logits'] # [bs,num_queries,1]
-
-        batch_center_logits = []
-        batch_inner_logits = []
-        batch_outer_logits = []
-        for i, (src,tgt) in enumerate(indices):
-            batch_idx = torch.full_like(src[0::3],i) # [num_tgt]
-            src_idx = src # [num_tgt]
-            tgt_idx = tgt # [num_tgt]
-
-            sorted_pairs = sorted(zip(tgt_idx, src_idx))
-            sorted_tgt_idx, sorted_src_idx = zip(*sorted_pairs)
-            center_tgt, center_src = sorted_tgt_idx[0::3], sorted_src_idx[0::3]
-            inner_tgt, inner_src = sorted_tgt_idx[1::3], sorted_src_idx[1::3]
-            outer_tgt, outer_src = sorted_tgt_idx[2::3], sorted_src_idx[2::3]
-
-            center_logits = src_logits[(batch_idx,center_src)] # [num_tgt,1]
-            batch_center_logits.append(center_logits)
-            inner_logits = src_logits[(batch_idx,inner_src)] # [num_tgt,1]
-            batch_inner_logits.append(inner_logits)
-            outer_logits = src_logits[(batch_idx,outer_src)] # [num_tgt,1]
-            batch_outer_logits.append(outer_logits)
-
-        batch_center_logits = torch.cat(batch_center_logits,dim=0)
-        batch_inner_logits = torch.cat(batch_inner_logits,dim=0)
-        batch_outer_logits = torch.cat(batch_outer_logits,dim=0)
-        
-        loss_rank = rank_loss(batch_center_logits,batch_inner_logits,batch_outer_logits,margin=0.2)
-            
-        losses = {'loss_rank': loss_rank}
-
-        return losses
-
-    def loss_salient(self, outputs, targets, indices, num_boxes, log=True):
-        """
-            Rank loss, for fine-grained boundary perception
-            NOTE: If the num_queries is so small, can not cover all gt, an error will appear here
-        """
-
-        assert 'salient_logits' in outputs
-        assert 'salient_loss_mask' in outputs
-        assert 'salient_gt' in outputs
-        salient_logits = outputs['salient_logits'] # [bs,t,1]
-        salient_logits = salient_logits.squeeze(dim=2) # [bs,t]
-        mask = outputs['salient_loss_mask'] # [bs,t]
-        salient_gt = outputs['salient_gt'] # [bs,t]
-
-        if self.salient_loss_impl == "BCE":
-            prob = salient_logits.sigmoid() # [bs,t]
-            ce_loss = F.binary_cross_entropy_with_logits(salient_logits, salient_gt, reduction="none")
-            p_t = prob * salient_gt + (1 - prob) * (1 - salient_gt) # [bs,t]
-            loss = ce_loss * ((1 - p_t) ** self.gamma)
-
-            if self.focal_alpha >= 0:
-                alpha_t = self.focal_alpha * salient_gt + (1 - self.focal_alpha) * (1 - salient_gt)
-                loss = alpha_t * loss
-
-            un_mask = ~mask
-            loss_salient = loss*un_mask
-
-            loss_salient = loss_salient.mean(1).sum() / num_boxes 
-
-        elif self.salient_loss_impl == "CE":
-
-            salient_gt = salient_gt / (torch.sum(salient_gt, dim=1, keepdim=True) + 1e-4) # [b,t]
-
-            loss_salient = -(salient_gt * F.log_softmax(salient_logits, dim=-1)) # [b,t]
-            
-            un_mask = ~mask
-            loss_salient = loss_salient*un_mask
-            loss_salient = loss_salient.sum(dim=1).mean()
-        else:
-            raise ValueError
- 
-        losses = {'loss_salient': loss_salient}
-
-        return losses
-
-    def loss_adapterCLS(self, outputs, targets, indices, num_boxes, log=True):
-        """
-        align loss
-        """
-        assert 'adapted_roi_feat_logits' in outputs
-        adapted_roi_feat_logits = outputs['adapted_roi_feat_logits'] # [bs,num_queries,num_classes]
-
-        idx = self._get_src_permutation_idx(indices) # (batch_idx,src_idx)
-        target_classes_o = torch.cat([t["semantic_labels"][J] for t, (_, J) in zip(targets, indices)]) # [batch_target_class_id]
-        target_classes = torch.full(adapted_roi_feat_logits.shape[:2], adapted_roi_feat_logits.shape[2],
-                                    dtype=torch.int64, device=adapted_roi_feat_logits.device) # [bs,num_queries]
-        target_classes[idx] = target_classes_o # [bs,num_queries]
-
-        target_classes_onehot = torch.zeros([adapted_roi_feat_logits.shape[0], adapted_roi_feat_logits.shape[1], adapted_roi_feat_logits.shape[2]+1],
-                                            dtype=adapted_roi_feat_logits.dtype, layout=adapted_roi_feat_logits.layout, device=adapted_roi_feat_logits.device) # [bs,num_queries,num_classes+1]
-        target_classes_onehot.scatter_(2, target_classes.unsqueeze(-1), 1)
-
-        target_classes_onehot = target_classes_onehot[:,:,:-1] # [bs,num_queries,num_classes]
-        
-        # adapted_roi_feat_logits = adapted_roi_feat_logits.sigmoid()
-        # loss_adapterCLS = (-target_classes_onehot*torch.log(adapted_roi_feat_logits)).sum()
-        # loss_adapterCLS = loss_adapterCLS/num_boxes
-
-        matched_classes_onehot = target_classes_onehot[idx] # [batch_matched_queries,num_classes]
-        matched_adapted_roi_feat_logits = adapted_roi_feat_logits[idx] # [batch_matched_queries,num_classes]
-
-        loss_adapterCLS = sigmoid_focal_loss(matched_adapted_roi_feat_logits, matched_classes_onehot, num_boxes, alpha=self.focal_alpha, gamma=self.gamma)
-
-        losses = {'loss_adapterCLS': loss_adapterCLS}
-
-        return losses
-
-    def loss_adapterCLS_weight(self, outputs, targets, indices, num_boxes):
-        """
-        align loss
-        """
-        assert 'roi_feat_weight' in outputs
-        assert 'roi_feat_logits' in outputs
-        roi_feat_logits = outputs['roi_feat_logits'] # [bs, num_queries, roi_size, num_classes]
-        roi_feat_weight = outputs['roi_feat_weight'] # [b,q,l,1]
-
-        roi_feat_logits = roi_feat_logits.permute(0,1,3,2) # [b,q,c,l]
-        roi_feat_weight = roi_feat_weight.squeeze(dim=3) # [b,q,l]
-
-        idx = self._get_src_permutation_idx(indices) # (batch_idx,src_idx)
-        target_classes_idx = torch.cat([t["semantic_labels"][J] for t, (_, J) in zip(targets, indices)]) # [batch_target_class_id]
-        merged_idx = (*idx, target_classes_idx)
-
-        matched_roi_feat_logits = roi_feat_logits[merged_idx] # [batch_matched, roi_size]
-        matched_roi_feat_weight = roi_feat_weight[idx] # [batch_mathed,roi_size]
-
-
-        if self.adapterCLS_conv_weight_type == "kl":
-            loss = F.kl_div(torch.log_softmax(matched_roi_feat_weight + 1e-4 ,dim=1),
-                            torch.softmax(matched_roi_feat_logits + 1e-4,dim=1),
-                            reduction="batchmean")
-        elif self.adapterCLS_conv_weight_type == "l1":
-            loss = F.l1_loss((matched_roi_feat_weight+1e-4).sigmoid(),(matched_roi_feat_logits+1e-4).sigmoid(),reduction="mean")
-        else:
-            raise ValueError
-        losses = {'loss_adapterCLS': loss}
-
-        return losses
-
-
 
     def _get_src_permutation_idx(self, indices):
         # permute predictions following indices
@@ -744,9 +172,7 @@ class SetCriterion(nn.Module):
         loss_map = {
             'labels': self.loss_labels,
             'boxes': self.loss_boxes,
-            'actionness': self.loss_actionness,
-            'actionness_refine': self.loss_actionness_refine,
-            'boxes_refine': self.loss_boxes_refine
+            'actionness': self.loss_actionness
         }
         assert loss in loss_map, f'do you really want to compute {loss} loss?'
         return loss_map[loss](outputs, targets, indices, num_boxes, **kwargs)
@@ -762,7 +188,7 @@ class SetCriterion(nn.Module):
 
         # Retrieve the matching between the outputs of the last layer and the targets
 
-        if self.actionness_loss or self.eval_proposal or self.enable_classAgnostic:
+        if self.actionness_loss and self.target_type != "none": # if using the actionness loss, adopt actionness logits for set-matching
             assert "actionness_logits" in outputs_without_aux
             # We flatten to compute the cost matrices in a batch
             logits = outputs_without_aux["actionness_logits"]
@@ -772,7 +198,7 @@ class SetCriterion(nn.Module):
             tgt_bbox = torch.cat([v["segments"] for v in targets]) # [gt_instance_num, 2]
             sizes = [len(v["segments"]) for v in targets]
             
-        else:
+        elif not self.actionness_loss or self.target_type == "none":
             assert "class_logits" in outputs_without_aux
             # We flatten to compute the cost matrices in a batch
             logits = outputs_without_aux["class_logits"]
@@ -781,7 +207,9 @@ class SetCriterion(nn.Module):
             tgt_ids = torch.cat([v["semantic_labels"] for v in targets]) # [gt_instance_num]
             tgt_bbox = torch.cat([v["segments"] for v in targets]) # [gt_instance_num, 2]
             sizes = [len(v["segments"]) for v in targets]
-
+        else:
+            raise ValueError
+        
         indices = self.matcher(logits, outputs_without_aux["pred_boxes"], tgt_ids, tgt_bbox, sizes)
 
         # Compute the average number of target boxes accross all nodes, for normalization purposes
@@ -798,9 +226,6 @@ class SetCriterion(nn.Module):
             for i, aux_outputs in enumerate(outputs['aux_outputs']):
                 indices = self.matcher(aux_outputs, targets)
                 for loss in self.base_losses:
-                    if loss == 'masks':
-                        # masks loss don't have innermediate feature of decoder, ignore it
-                        continue
                     kwargs = {}
                     if loss == 'labels':
                         # Logging is enabled only for the last layer
@@ -809,22 +234,6 @@ class SetCriterion(nn.Module):
                     l_dict = {k + f'_{i}': v for k, v in l_dict.items()}
                     losses.update(l_dict)
 
-
-        if self.salient_loss:
-            salient_loss = self.loss_salient(outputs, targets, indices, num_boxes)
-            losses.update(salient_loss)
-
-        if self.adapterCLS_loss:
-            if self.adapterCLS_type == "conv_weight":
-                adpterCLS_loss = self.loss_adapterCLS_weight(outputs, targets, indices, num_boxes)
-            else:
-                adpterCLS_loss = self.loss_adapterCLS(outputs, targets, indices, num_boxes)
-            losses.update(adpterCLS_loss)
-
-        if self.refine_actionness_loss:
-            indices_refine = self.matcher(outputs_without_aux["actionness_logits_refine"], outputs_without_aux["pred_boxes_refine"], tgt_ids, tgt_bbox, sizes)
-            for loss in self.refine_losses:
-                losses.update(self.get_loss(loss, outputs, targets, indices_refine, num_boxes))
 
         if self.distillation_loss:
             distillation_loss = self.loss_distillation(outputs, targets, indices, num_boxes)

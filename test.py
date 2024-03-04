@@ -31,76 +31,20 @@ def test(model,
     # action_evaluator = None
     action_evaluator = getattr(tad_eval,dataset_name+"Evaluator")(dataset_name=dataset_name, epoch=epoch, dataset=data_loader.dataset, iou_range=iou_range,
                                     nms_mode=['raw'],
-                                    eval_proposal=args.eval_proposal,
                                     filter_threshold=args.filter_threshold
                                     )
-
-    # #  For computing ACC use ###
-    # gt_labels_list = []
-    # gt_pred_list = []
-    # epoch_loss_dict = {}
-    # #  For computing ACC use ###
 
     count = 0
     # res_dict = {}
     for samples, targets in data_loader:
         samples = samples.to(device)
 
-        # #  For computing ACC use ###
-        # targets = [{k: v.to(device) if k in ['segments', 'labels'] and len(t[k])>0 else v for k, v in t.items()} for t in targets] # Not Required in inferene stage
-        # #  For computing ACC use ###
-
         classes = data_loader.dataset.classes
         description_dict = data_loader.dataset.description_dict
 
-        outputs = model(samples, classes, description_dict,targets,epoch)
-
-        # #  For computing inference time use ###
-        # # 如果使用的是 CUDA，进行预热和同步，确保更准确的时间测量
-        # if device == 'cuda':
-        #     with torch.no_grad():
-        #         for _ in range(10):
-        #             outputs = model(samples, classes, description_dict,targets,epoch)
-        #     torch.cuda.synchronize()
-
-        # start_time = time.time()
-
-        # # 推理多次并测量平均时间
-        # num_tests = 10
-        # with torch.no_grad():
-        #     for _ in range(num_tests):
-        #         outputs = model(samples, classes, description_dict,targets,epoch)
-        #         if device == 'cuda':
-        #             torch.cuda.synchronize()
-
-        # end_time = time.time()
-
-        # # 计算平均推理时间
-        # avg_time = (end_time - start_time) / num_tests
-        # print(f"avg_time: {avg_time} seconds.")
-        # raise
-        # #  For computing inference time use ###
+        outputs = model(samples, classes, description_dict)
 
 
-
-        # #  For computing ACC use ###
-        # if 'gt_logits' in outputs:
-        #     gt_logits = outputs['gt_logits']
-        #     gt_labels = outputs['gt_labels']
-        #     gt_labels_list.append(gt_labels)
-        #     gt_pred_list.append(torch.argmax(gt_logits.softmax(-1),dim=-1))
-        # #  For computing ACC use ###
-
-        # loss_dict = criterion(outputs, targets)
-        # weight_dict = criterion.weight_dict
-        # loss_dict_unscaled = {f'{k}_unscaled': v.item() for k, v in loss_dict.items()} # logging all losses thet are computed (note that some of these are not allpied for backward)
-        # loss_dict_scaled = {k: v.item() * weight_dict[k] for k, v in loss_dict.items() if k in weight_dict}
-        # loss_value = sum(loss_dict_scaled.values())
-
-        # # update the epoch_loss
-        # epoch_loss_dict.update({k: epoch_loss_dict.get(k,0.0) + v for k, v in loss_dict_unscaled.items()})
-        # epoch_loss_dict.update({k: epoch_loss_dict.get(k,0.0) + v for k, v in loss_dict_scaled.items()})
-        
         count = count + len(targets)
         logger.info(f"Inference Epoch: {epoch} ({count}/{len(data_loader)*len(targets)})")
         if verbose != None:
@@ -111,40 +55,13 @@ def test(model,
         
         # post process
         video_duration = torch.FloatTensor([t["video_duration"] for t in targets]).to(device)
-        results = postprocessor(outputs, video_duration, args.eval_proposal)
+        results = postprocessor(outputs, video_duration)
         res = {target['video_name']: output for target, output in zip(targets, results)}
         # res_dict.update(res)
 
         if action_evaluator is not None:
             action_evaluator.update(res)
 
-    # #  For computing ACC use ###
-    # gt_labels_list = torch.cat(gt_labels_list,dim=0).cpu().detach().numpy()
-    # gt_pred_list = torch.cat(gt_pred_list,dim=0).cpu().detach().numpy()
-    # acc = accuracy_score(gt_labels_list,gt_pred_list)
-    # print(f"The val acc is: {acc}")
-
-
-    # # 计算类别总数
-    # num_classes = 5
-
-    # # 初始化每个类别的正确预测数和总预测数的字典
-    # class_correct = {i: 0 for i in range(num_classes)}
-    # class_total = {i: 0 for i in range(num_classes)}
-
-    # # 遍历真实标签和预测标签，统计每个类别的正确预测数和总预测数
-    # for gt, pred in zip(gt_pred_list, gt_labels_list):
-    #     class_total[gt] += 1
-    #     if gt == pred:
-    #         class_correct[gt] += 1
-
-    # # 计算每个类别的准确度
-    # class_accuracy = {i: class_correct[i] / class_total[i] if class_total[i] > 0 else 0 for i in range(num_classes)}
-
-    # # 打印每个类别的准确度
-    # for i in range(num_classes):
-    #     print(f"Class {i} Accuracy: {class_accuracy[i]:.4f}")
-    # #  For computing ACC use ###
 
     # epoch_loss_dict.update({k: v/count for k, v in epoch_loss_dict.items()})
     # logger.info(f"Inference Epoch: {epoch}, epoch_loss_dict:{epoch_loss_dict}")

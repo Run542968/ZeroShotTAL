@@ -1,22 +1,20 @@
 # ------------------------------------------------------------------------
-# TadTR: End-to-end Temporal Action Detection with Transformer
+# Modules to compute the matching cost and solve the corresponding LSAP.
+# Copyright (c) 2021 Microsoft. All Rights Reserved.
+# Licensed under the Apache License, Version 2.0 [see LICENSE for details]
+# ------------------------------------------------------------------------
+# Modified from DETR (https://github.com/facebookresearch/detr)
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 # ------------------------------------------------------------------------
 # Modified from Deformable DETR (https://github.com/fundamentalvision/Deformable-DETR)
 # Copyright (c) 2020 SenseTime. All Rights Reserved.
 # ------------------------------------------------------------------------
-# Modified from DETR (https://github.com/facebookresearch/detr)
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
-# ------------------------------------------------------------------------
-
-# Modified from DETR (https://github.com/facebookresearch/detr)
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 
 import torch
 from scipy.optimize import linear_sum_assignment
 from torch import nn
 
-from util.segment_ops import segment_cw_to_t1t2, segment_iou
-import pdb
+from utils.segment_ops import segment_cw_to_t1t2,segment_iou
 
 
 class HungarianMatcher(nn.Module):
@@ -26,78 +24,80 @@ class HungarianMatcher(nn.Module):
     while the others are un-matched (and thus treated as non-objects).
     """
 
-    def __init__(self, cost_class: float = 1, cost_seg: float = 1, cost_iou: float = 1, ce_loss: bool = False):
+    def __init__(self, cost_class: float = 1, cost_bbox: float = 1, cost_giou: float = 1, args=None):
         """Creates the matcher
         Params:
             cost_class: This is the relative weight of the classification error in the matching cost
-            cost_seg: This is the relative weight of the L1 error of the segment coordinates in the matching cost
-            cost_iou: This is the relative weight of the iou loss of the segment in the matching cost
-            ce_loss: Whether to use CrossEntropy instead of BCE loss, using softmax substitute sigmoid
+            cost_bbox: This is the relative weight of the L1 error of the bounding box coordinates in the matching cost
+            cost_giou: This is the relative weight of the giou loss of the bounding box in the matching cost
         """
         super().__init__()
         self.cost_class = cost_class
-        self.cost_seg = cost_seg
-        self.cost_iou = cost_iou
-        self.ce_loss = ce_loss
-        assert cost_class != 0 or cost_seg!= 0 or cost_iou != 0, "all costs cant be 0"
+        self.cost_bbox = cost_bbox
+        self.cost_giou = cost_giou
+        # self.actionness_loss = args.actionness_loss
+        # self.eval_proposal = args.eval_proposal
+        # self.enable_classAgnostic = args.enable_classAgnostic
+        assert cost_class != 0 or cost_bbox != 0 or cost_giou != 0, "all costs cant be 0"
 
     @torch.no_grad()
-    def forward(self, outputs, targets):
+    def forward(self, logits, pred_boxes, tgt_ids, tgt_bbox, sizes):
         """ Performs the matching
         Params:
             outputs: This is a dict that contains at least these entries:
                  "pred_logits": Tensor of dim [batch_size, num_queries, num_classes] with the classification logits
-                 "pred_segments": Tensor of dim [batch_size, num_queries, 2] with the predicted segment coordinates
-
+                 "pred_boxes": Tensor of dim [batch_size, num_queries, 2] with the predicted box coordinates
             targets: This is a list of targets (len(targets) = batch_size), where each target is a dict containing:
-                 "labels": Tensor of dim [num_target_segments] (where num_target_segments is the number of ground-truth
+                 "labels": Tensor of dim [num_target_boxes] (where num_target_boxes is the number of ground-truth
+                           objects in the target) containing the binary class labels
+                 "semantic_lables": Tensor of dim [num_target_boxes] (where num_target_boxes is the number of ground-truth
                            objects in the target) containing the class labels
-                 "segments": Tensor of dim [num_target_segments, 2] containing the target segment coordinates
-
+                 "segments": Tensor of dim [num_target_boxes, 2] containing the target box coordinates
         Returns:
             A list of size batch_size, containing tuples of (index_i, index_j) where:
                 - index_i is the indices of the selected predictions (in order)
                 - index_j is the indices of the corresponding selected targets (in order)
             For each batch element, it holds:
-                len(index_i) = len(index_j) = min(num_queries, num_target_segments)
+                len(index_i) = len(index_j) = min(num_queries, num_target_boxes)
         """
-        bs, num_queries = outputs["pred_logits"].shape[:2]
 
-        # We flatten to compute the cost matrices in a batch
-        if self.ce_loss:
-            out_prob = outputs["pred_logits"].flatten(0, 1).softmax(dim=-1)
-        else:
-            out_prob = outputs["pred_logits"].flatten(0, 1).sigmoid()  #  [batch_size * num_queries, num_classes]
-        out_seg = outputs["pred_segments"].flatten(0, 1)  # [batch_size * num_queries, 2]
+        bs, num_queries = logits.shape[:2] 
+        out_prob = logits.flatten(0, 1).sigmoid()  # [batch_size * num_queries, 1]
+        out_bbox = pred_boxes.flatten(0, 1)  # [batch_size * num_queries, 2]
+        tgt_ids = tgt_ids
+        tgt_bbox = tgt_bbox
 
-        # Also concat the target labels and segments
-        tgt_ids = torch.cat([v["labels"] for v in targets])  # shape = n1+n2+...
-        tgt_seg = torch.cat([v["segments"] for v in targets])
-
+ 
         # Compute the classification cost.
-        if self.ce_loss:
-            cost_class = out_prob[:,tgt_ids]
-        else:
-            alpha = 0.25
-            gamma = 2.0
-            neg_cost_class = (1 - alpha) * (out_prob ** gamma) * (-(1 - out_prob + 1e-8).log())
-            pos_cost_class = alpha * ((1 - out_prob) ** gamma) * (-(out_prob + 1e-8).log())
-            cost_class = pos_cost_class[:, tgt_ids] - neg_cost_class[:, tgt_ids] # [bs*q,batch_tgt] get tgt logits of all queris in the batch
-            
-        # Compute the L1 cost between segments
-        cost_seg = torch.cdist(out_seg, tgt_seg, p=1) # [bs*q,batch_tgt] get dist between all batch_queris and all batch_tgt
+        alpha = 0.25
+        gamma = 2.0
+        neg_cost_class = (1 - alpha) * (out_prob ** gamma) * (-(1 - out_prob + 1e-8).log())
+        pos_cost_class = alpha * ((1 - out_prob) ** gamma) * (-(out_prob + 1e-8).log())
 
-        # Compute the iou cost betwen segments
-        cost_iou = -segment_iou(segment_cw_to_t1t2(out_seg), segment_cw_to_t1t2(tgt_seg))
+        cost_class = pos_cost_class[:, tgt_ids] - neg_cost_class[:, tgt_ids] # [b*num_queries, gt_instance_num]
 
-        # Final cost matrix, [bs x nq, batch_ngt]
-        C = self.cost_seg * cost_seg + self.cost_class * cost_class + self.cost_iou * cost_iou
-        C = C.view(bs, num_queries, -1).cpu()
+        # Compute the L1 cost between boxes
+        cost_bbox = torch.cdist(out_bbox, tgt_bbox, p=1) # [b*num_queries, gt_instance_num]
 
-        sizes = [len(v["segments"]) for v in targets]
+        # Compute the giou cost betwen boxes
+        # NOTE that: for temporal data, then generalized_seg_iou is equal to seg_iou, since the area==union
+        cost_giou = -segment_iou(
+                    segment_cw_to_t1t2(out_bbox).clamp(min=0,max=1), 
+                    segment_cw_to_t1t2(tgt_bbox).clamp(min=0,max=1)
+                    ) # [b*num_queries, gt_instance_num], the clamp is to deal with the case "center"-"width/2" < 0 and "center"+"width/2" < 1
+
+        # Final cost matrix
+        C = self.cost_bbox * cost_bbox + self.cost_class * cost_class + self.cost_giou * cost_giou
+        C = C.view(bs, num_queries, -1).cpu() # [b, num_queries, gt_instance_num]
+
+
         indices = [linear_sum_assignment(c[i]) for i, c in enumerate(C.split(sizes, -1))]
         return [(torch.as_tensor(i, dtype=torch.int64), torch.as_tensor(j, dtype=torch.int64)) for i, j in indices]
 
 
 def build_matcher(args):
-    return HungarianMatcher(cost_class=args.set_cost_class, cost_seg=args.set_cost_seg, cost_iou=args.set_cost_iou, ce_loss=args.ce_loss)
+    return HungarianMatcher(cost_class=args.set_cost_class, 
+                            cost_bbox=args.set_cost_bbox, 
+                            cost_giou=args.set_cost_giou,
+                            args = args
+                            )

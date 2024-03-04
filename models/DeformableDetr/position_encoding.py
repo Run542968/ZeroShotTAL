@@ -14,7 +14,7 @@ import math
 import torch
 from torch import nn
 
-from util.misc import NestedTensor
+from utils.misc import NestedTensor
 
 
 class PositionEmbeddingSine(nn.Module):
@@ -50,7 +50,8 @@ class PositionEmbeddingSine(nn.Module):
         pos_x = x_embed[:, :, None] / dim_t  # N x T x C
         # n,c,t
         pos_x = torch.stack((pos_x[:, :, 0::2].sin(), pos_x[:, :, 1::2].cos()), dim=3).flatten(2)
-        pos = pos_x.permute(0, 2, 1)    # N x C x T
+        # pos = pos_x.permute(0, 2, 1)    # N x C x T
+        pos = pos_x
         return pos
 
 

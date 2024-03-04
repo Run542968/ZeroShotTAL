@@ -17,9 +17,8 @@ import torch.nn.functional as F
 from torch import nn, Tensor
 from torch.nn.init import xavier_uniform_, constant_, uniform_, normal_
 
-from util.misc import inverse_sigmoid
-from models.ops.temporal_deform_attn import DeformAttn
-from opts import cfg
+from utils.misc import inverse_sigmoid
+from models.DeformableDetr.ops.temporal_deform_attn import DeformAttn
 
 
 class DeformableTransformer(nn.Module):
@@ -105,7 +104,7 @@ class DeformableTransformer(nn.Module):
 
         # deformable encoder
         memory = self.encoder(src_flatten, temporal_lens, level_start_index, valid_ratios, 
-            lvl_pos_embed_flatten if cfg.use_pos_embed else None, 
+            lvl_pos_embed_flatten, 
             mask_flatten)  # shape=(bs, t, c)
 
         bs, _, c = memory.shape
@@ -232,16 +231,15 @@ class DeformableTransformerDecoderLayer(nn.Module):
         return tgt
 
     def forward(self, tgt, query_pos, reference_points, src, src_spatial_shapes, level_start_index, src_padding_mask=None):
-        if not cfg.disable_query_self_att:
-            # self attention
-            q = k = self.with_pos_embed(tgt, query_pos)
+  
+        # self attention
+        q = k = self.with_pos_embed(tgt, query_pos)
 
-            tgt2 = self.self_attn(q.transpose(0, 1), k.transpose(0, 1), tgt.transpose(0, 1))[0].transpose(0, 1)
-            tgt = tgt + self.dropout2(tgt2)
-            tgt = self.norm2(tgt)
+        tgt2 = self.self_attn(q.transpose(0, 1), k.transpose(0, 1), tgt.transpose(0, 1))[0].transpose(0, 1)
+        tgt = tgt + self.dropout2(tgt2)
+        tgt = self.norm2(tgt)
 
-        else:
-            pass
+
         # cross attention
         tgt2, _ = self.cross_attn(self.with_pos_embed(tgt, query_pos),
                                reference_points,
@@ -327,12 +325,11 @@ def _get_activation_fn(activation):
 def build_deformable_transformer(args):
     return DeformableTransformer(
         d_model=args.hidden_dim,
+        dropout=args.dropout,
         nhead=args.nheads,
+        dim_feedforward=args.dim_feedforward,
         num_encoder_layers=args.enc_layers,
         num_decoder_layers=args.dec_layers,
-        dim_feedforward=args.dim_feedforward,
-        dropout=args.dropout,
-        activation=args.activation,
         return_intermediate_dec=True,
         num_feature_levels=1,
         dec_n_points=args.dec_n_points,

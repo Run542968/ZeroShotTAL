@@ -13,11 +13,10 @@ class PostProcess(nn.Module):
         self.target_type = args.target_type
         self.proposals_weight_type = args.proposals_weight_type
         self.actionness_loss = args.actionness_loss
-        self.enable_classAgnostic = args.enable_classAgnostic
         self.prob_type = args.prob_type
 
     @torch.no_grad()
-    def forward(self, outputs, target_sizes, eval_proposal=False):
+    def forward(self, outputs, target_sizes):
         """ Perform the computation
         Parameters:
             outputs: raw outputs of the model
@@ -25,42 +24,26 @@ class PostProcess(nn.Module):
         """
         out_bbox = outputs['pred_boxes'] # [bs,num_queries,2]
         
-        if self.target_type != "none":
-            if eval_proposal:
-                assert 'actionness_logits' in outputs
-                actionness_logits = outputs['actionness_logits']
-                assert actionness_logits.shape[-1] == 1, f"please check the dimension of foreground_logits, shape:{actionness_logits.shape}"
-                prob = actionness_logits.sigmoid() # only evaluate the proposal
-            else:
-                assert 'class_logits' in outputs
-                class_logits = outputs['class_logits'] #  [bs,num_queries,num_classes] 
-                if self.actionness_loss or self.enable_classAgnostic: # [bs,num_queries,1]
-                    assert 'actionness_logits' in outputs
-                    actionness_logits = outputs['actionness_logits']
-                    actionness_logits = actionness_logits.sigmoid()
 
-                    if self.prob_type == "softmax":
-                        if self.proposals_weight_type == "before_softmax":
-                            prob = torch.mul(actionness_logits,class_logits).softmax(-1) # [bs,num_queries,num_classes]
-                        elif self.proposals_weight_type == "after_softmax":
-                            prob = torch.mul(actionness_logits,class_logits.softmax(-1)) # [bs,num_queries,num_classes]
-                    elif self.prob_type == "sigmoid":
-                        prob = torch.mul(actionness_logits,class_logits.sigmoid()) # [bs,num_queries,num_classes]
-                    elif self.prob_type == "none_mul":
-                        prob = class_logits.softmax(-1) # [bs,num_queries,num_classes]
-                    else:
-                        raise NotImplementedError
-                else:
-                    if self.prob_type == "softmax":
-                        prob = class_logits.softmax(-1)
-                    elif self.prob_type == "sigmoid":
-                        prob = class_logits.sigmoid()
-                    else:
-                        raise NotImplementedError
+        assert 'class_logits' in outputs
+        class_logits = outputs['class_logits'] #  [bs,num_queries,num_classes] 
+        if self.actionness_loss: # [bs,num_queries,1]
+            assert 'actionness_logits' in outputs
+            actionness_logits = outputs['actionness_logits']
+            actionness_prob = actionness_logits.sigmoid()
+
+            if self.prob_type == "softmax":
+                if self.proposals_weight_type == "before_softmax":
+                    prob = torch.mul(actionness_prob,class_logits).softmax(-1) # [bs,num_queries,num_classes]
+                elif self.proposals_weight_type == "after_softmax":
+                    prob = torch.mul(actionness_prob,class_logits.softmax(-1)) # [bs,num_queries,num_classes]
+            elif self.prob_type == "sigmoid":
+                prob = torch.mul(actionness_prob,class_logits.sigmoid()) # [bs,num_queries,num_classes]
+            elif self.prob_type == "none_mul":
+                prob = class_logits.softmax(-1) # [bs,num_queries,num_classes]
+            else:
+                raise NotImplementedError
         else:
-            assert 'class_logits' in outputs
-            class_logits = outputs['class_logits'] #  [bs,num_queries,num_classes] 
-            
             if self.prob_type == "softmax":
                 prob = class_logits.softmax(-1)
             elif self.prob_type == "sigmoid":

@@ -24,13 +24,11 @@ from .transformer import build_transformer
 from .criterion import build_criterion
 from .postprocess import build_postprocess
 from models.clip import build_text_encoder
-from .refine_decoder import build_refine_decoder
-# from .semantic_head import build_semantic_head
 from models.clip import clip as clip_pkg
 import torchvision.ops.roi_align as ROIalign
 import numpy as np
 import os
-
+import copy
 logger = logging.getLogger()
 
 
@@ -48,6 +46,9 @@ class MLP(nn.Module):
             x = F.relu(layer(x)) if i < self.num_layers - 1 else layer(x)
         return x
 
+def _get_clones(module, N):
+    return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
+
 
 class ConditionalDETR(nn.Module):
     """ This is the Conditional DETR module that performs object detection """
@@ -55,7 +56,6 @@ class ConditionalDETR(nn.Module):
                  backbone, 
                  transformer, 
                  text_encoder, 
-                 refine_decoder,
                  logit_scale, 
                  device, 
                  num_classes,
@@ -85,65 +85,24 @@ class ConditionalDETR(nn.Module):
         self.num_queries = args.num_queries
         self.target_type = args.target_type
         self.aux_loss = args.aux_loss
-        self.norm_embed = args.norm_embed
-        self.exp_logit_scale = args.exp_logit_scale
-       
+
         self.ROIalign_strategy = args.ROIalign_strategy
         self.ROIalign_size = args.ROIalign_size
         
         self.pooling_type = args.pooling_type
 
-        self.eval_proposal = args.eval_proposal 
+        self.with_iterative_refine = args.with_iterative_refine
 
         self.actionness_loss = args.actionness_loss
-        self.enable_classAgnostic = args.enable_classAgnostic
 
-
-        self.enable_refine = args.enable_refine
         self.enable_posPrior = args.enable_posPrior
-
-        self.salient_loss = args.salient_loss
-
-        self.adapterCLS_loss = args.adapterCLS_loss
-        self.adapterCLS_type = args.adapterCLS_type
-        self.adapterCLS_conv_weight_type = args.adapterCLS_conv_weight_type
-        self.adapterCLS_conv_add_verbs_type = args.adapterCLS_conv_add_verbs_type
-        self.adapterCLS_conv_add_verbs_coef = args.adapterCLS_conv_add_verbs_coef
-
-
-        self.dynamic_element_catch = args.dynamic_element_catch
-        self.dynamic_element_num = args.dynamic_element_num
-        self.dynamic_coef = args.dynamic_coef
 
 
         self.distillation_loss = args.distillation_loss
 
         hidden_dim = transformer.d_model
 
-        self.refine_actionness_loss = args.refine_actionness_loss
-        # if self.refine_actionness_loss:
-        #     self.bbox_embed_refine = MLP(hidden_dim, hidden_dim, 2, 3)
-        #     # init bbox_mebed
-        #     nn.init.constant_(self.bbox_embed_refine.layers[-1].weight.data, 0)
-        #     nn.init.constant_(self.bbox_embed_refine.layers[-1].bias.data, 0)
-            
-        #     self.actionness_embed_refine = nn.Linear(hidden_dim,1)
-        #     # init prior_prob setting for focal loss
-        #     prior_prob = 0.01
-        #     bias_value = -math.log((1 - prior_prob) / prior_prob)
-        #     self.actionness_embed_refine.bias.data = torch.ones(1) * bias_value
 
-
-
-
-
-        self.bbox_embed = MLP(hidden_dim, hidden_dim, 2, 3)
-        # init bbox_mebed
-        nn.init.constant_(self.bbox_embed.layers[-1].weight.data, 0)
-        nn.init.constant_(self.bbox_embed.layers[-1].bias.data, 0)
-        
-        if self.enable_refine:
-            self.refine_decoder = refine_decoder
 
         if self.enable_posPrior:
             self.query_embed = nn.Embedding(self.num_queries,1)
@@ -153,25 +112,40 @@ class ConditionalDETR(nn.Module):
         else:
             self.query_embed = nn.Embedding(self.num_queries, hidden_dim)
 
+        # self.input_proj = nn.Conv1d(backbone.feat_dim, hidden_dim, kernel_size=1)
+        self.input_proj = nn.ModuleList([ # following TadTR
+            nn.Sequential(
+                nn.Conv1d(backbone.feat_dim, hidden_dim, kernel_size=1),
+                nn.GroupNorm(32, hidden_dim),
+            )])
+        for proj in self.input_proj:
+            nn.init.xavier_uniform_(proj[0].weight, gain=1)
+            nn.init.constant_(proj[0].bias, 0)
+
+
+
+        self.bbox_embed = MLP(hidden_dim, hidden_dim, 2, 3)
+        # init bbox_mebed
+        nn.init.constant_(self.bbox_embed.layers[-1].weight.data, 0)
+        nn.init.constant_(self.bbox_embed.layers[-1].bias.data, 0)
         
-        self.input_proj = nn.Conv1d(backbone.feat_dim, hidden_dim, kernel_size=1)
-        
+
+
         if self.target_type != "none":
             self.class_embed = nn.Linear(hidden_dim, hidden_dim)
             # init prior_prob setting for focal loss
             prior_prob = 0.01
             bias_value = -math.log((1 - prior_prob) / prior_prob)
             self.class_embed.bias.data = torch.ones(hidden_dim) * bias_value
-
         else:
-            if not self.enable_classAgnostic or not self.eval_proposal:
-                self.class_embed = nn.Linear(hidden_dim, num_classes)
-                # init prior_prob setting for focal loss
-                prior_prob = 0.01
-                bias_value = -math.log((1 - prior_prob) / prior_prob)
-                self.class_embed.bias.data = torch.ones(num_classes) * bias_value
+            self.class_embed = nn.Linear(hidden_dim, num_classes)
+            # init prior_prob setting for focal loss
+            prior_prob = 0.01
+            bias_value = -math.log((1 - prior_prob) / prior_prob)
+            self.class_embed.bias.data = torch.ones(num_classes) * bias_value
 
-        if self.actionness_loss or self.eval_proposal or self.enable_classAgnostic:
+
+        if self.actionness_loss:
             self.actionness_embed = nn.Linear(hidden_dim,1)
             # init prior_prob setting for focal loss
             prior_prob = 0.01
@@ -179,35 +153,22 @@ class ConditionalDETR(nn.Module):
             self.actionness_embed.bias.data = torch.ones(1) * bias_value
 
 
-        if self.salient_loss:
-            self.salient_head = nn.Sequential(
-                nn.Conv1d(hidden_dim, hidden_dim, kernel_size=3, padding=1),
-                nn.LeakyReLU(0.2),
-                nn.Conv1d(hidden_dim, 1, kernel_size=1)
-            )
+        # following TadTR
+        num_pred = transformer.decoder.num_layers
+        if self.with_iterative_refine: # specific parameters for each laryer
+            self.class_embed = _get_clones(self.class_embed, num_pred)
+            self.bbox_embed = _get_clones(self.bbox_embed, num_pred)
+            nn.init.constant_(
+                self.bbox_embed[0].layers[-1].bias.data[1:], -2.0)
+            if self.actionness_loss:
+                self.actionness_embed = _get_clones(self.actionness_embed, num_pred)
+        else: # shared parameters for each laryer
+            self.class_embed = nn.ModuleList([self.class_embed for _ in range(num_pred)])
+            nn.init.constant_(self.bbox_embed.layers[-1].bias.data[1:], -2.0)
+            self.bbox_embed = nn.ModuleList([self.bbox_embed for _ in range(num_pred)])
+            if self.actionness_loss:
+                self.actionness_embed = nn.ModuleList([self.actionness_embed for _ in range(num_pred)])
 
-        if self.adapterCLS_loss:
-            if self.adapterCLS_type == "sa":
-                self.adapter = nn.MultiheadAttention(embed_dim=hidden_dim,num_heads=4)
-            elif self.adapterCLS_type == "conv_avg":
-                self.adapter = nn.Conv1d(in_channels=hidden_dim,out_channels=hidden_dim,kernel_size=3,padding=1)
-            elif self.adapterCLS_type == "conv_add":
-                self.adapter = nn.Conv1d(in_channels=hidden_dim,out_channels=1,kernel_size=3,padding=1)
-            elif self.adapterCLS_type == "conv_weight":
-                self.adapter = nn.Sequential(
-                    nn.Conv1d(in_channels=hidden_dim,out_channels=1,kernel_size=3,padding=1),
-                    # nn.LeakyReLU(0.2),
-                    # nn.Conv1d(in_channels=hidden_dim,out_channels=1,kernel_size=3,padding=1)
-                )
-            elif self.adapterCLS_type == "conv_add_verbs":
-                self.adapter = nn.Conv1d(in_channels=hidden_dim,out_channels=1,kernel_size=3,padding=1)
-                self.learnable_verbs = nn.Embedding(1, hidden_dim)
-            else:
-                raise ValueError
-
-        if self.dynamic_element_catch:
-            self.dynamic_elements = nn.Embedding(self.dynamic_element_num, hidden_dim)
-            self.dynamic_fusion = nn.MultiheadAttention(embed_dim=hidden_dim,num_heads=4)
 
         if self.target_type != "none":
             logger.info(f"The target_type is {self.target_type}, using text embedding as target, on task: {args.task}!")
@@ -287,98 +248,27 @@ class ConditionalDETR(nn.Module):
         text_feats: [num_classes,dim]
         '''
         if len(visual_feats.shape)==2: # batch_num_instance,dim
-            if self.norm_embed:
-                visual_feats = visual_feats / visual_feats.norm(dim=-1,keepdim=True)
-                text_feats = text_feats / text_feats.norm(dim=-1,keepdim=True)
-                if self.exp_logit_scale:
-                    logit_scale = self.logit_scale.exp()
-                else:
-                    logit_scale = self.logit_scale
-                logits = torch.einsum("bd,cd->bc",visual_feats,text_feats)*logit_scale
-            else:
-                logits = torch.einsum("bd,cd->bc",visual_feats,text_feats)
+            visual_feats = visual_feats / visual_feats.norm(dim=-1,keepdim=True)
+            text_feats = text_feats / text_feats.norm(dim=-1,keepdim=True)
+            logit_scale = self.logit_scale.exp()
+            logits = torch.einsum("bd,cd->bc",visual_feats,text_feats)*logit_scale
             return logits
         elif len(visual_feats.shape)==3:# batch,num_queries/snippet_length,dim
-            if self.norm_embed:
-                visual_feats = visual_feats / visual_feats.norm(dim=-1,keepdim=True)
-                text_feats = text_feats / text_feats.norm(dim=-1,keepdim=True)
-                if self.exp_logit_scale:
-                    logit_scale = self.logit_scale.exp()
-                else:
-                    logit_scale = self.logit_scale
-                logits = torch.einsum("bqd,cd->bqc",visual_feats,text_feats)*logit_scale
-            else:
-                logits = torch.einsum("bqd,cd->bqc",visual_feats,text_feats)
+            visual_feats = visual_feats / visual_feats.norm(dim=-1,keepdim=True)
+            text_feats = text_feats / text_feats.norm(dim=-1,keepdim=True)
+            logit_scale = self.logit_scale.exp()
+            logits = torch.einsum("bqd,cd->bqc",visual_feats,text_feats)*logit_scale
             return logits
         elif len(visual_feats.shape)==4:# batch,num_queries,snippet_length,dim
-            if self.norm_embed:
-                visual_feats = visual_feats / visual_feats.norm(dim=-1,keepdim=True)
-                text_feats = text_feats / text_feats.norm(dim=-1,keepdim=True)
-                if self.exp_logit_scale:
-                    logit_scale = self.logit_scale.exp()
-                else:
-                    logit_scale = self.logit_scale
-                logits = torch.einsum("bqld,cd->bqlc",visual_feats,text_feats)*logit_scale
-            else:
-                logits = torch.einsum("bqld,cd->bqlc",visual_feats,text_feats)
+            visual_feats = visual_feats / visual_feats.norm(dim=-1,keepdim=True)
+            text_feats = text_feats / text_feats.norm(dim=-1,keepdim=True)
+            logit_scale = self.logit_scale.exp()
+            logits = torch.einsum("bqld,cd->bqlc",visual_feats,text_feats)*logit_scale
             return logits
-        
         else:
             raise NotImplementedError
 
-    def _adapter_forward(self, roi_feat, roi_pos=None):
-        '''
-        roi_feat: [b,q,l,dim]
-        '''
-        def with_pos_embed(tensor, pos=None):
-            return tensor if pos is None else tensor + pos
 
-
-        b,q,l,d = roi_feat.shape
-        if self.adapterCLS_type == "sa":
-            roi_feat = roi_feat.permute(2,0,1,3)
-            roi_feat = roi_feat.reshape(l,b*q,d)
-            roi_pos = roi_pos.permute(2,0,1,3)
-            roi_pos = roi_pos.reshape(l,b*q,d)
-            query = key = with_pos_embed(roi_feat,roi_pos)
-            value = roi_feat
-            adapted_roi_feat = self.adapter(query=query,
-                                            key=key,
-                                            value=value
-                                            )[0] # [l,b*q,dim]
-            adapted_roi_feat = adapted_roi_feat.mean(0) # [b*q,dim]
-            adapted_roi_feat = adapted_roi_feat.reshape(b,q,d) # [b,q,dim]
-            roi_feat_weight = None
-        elif self.adapterCLS_type == "conv_avg":
-            roi_feat = roi_feat.reshape(b*q,l,d) # [b*q,l,d]
-            roi_feat = roi_feat.permute(0,2,1) # [b*q,dim,l]
-            adapted_roi_feat = self.adapter(roi_feat).permute(0,2,1) # [b*q,l,dim]
-            adapted_roi_feat = adapted_roi_feat.reshape(b,q,l,d)
-            adapted_roi_feat = adapted_roi_feat.mean(2) # [b,q,dim]
-
-            roi_feat_weight= None
-        elif self.adapterCLS_type == "conv_add" or self.adapterCLS_type == "conv_add_verbs":
-            roi_feat_re = roi_feat.reshape(b*q,l,d) # [b*q,l,d]
-            roi_feat_weight = self.adapter(roi_feat_re.permute(0,2,1)).permute(0,2,1) # [b*q,l]
-            roi_feat_weight = roi_feat_weight.reshape(b,q,l,1)
-            roi_feat_weight = roi_feat_weight.sigmoid()
-            adapted_roi_feat = (roi_feat * roi_feat_weight).sum(2) # [b,q,dim]
-        elif self.adapterCLS_type == "conv_weight":
-            roi_feat_re = roi_feat.reshape(b*q,l,d) # [b*q,l,d]
-            roi_feat_weight = self.adapter(roi_feat_re.permute(0,2,1)).permute(0,2,1) # [b*q,l]
-            roi_feat_weight = roi_feat_weight.reshape(b,q,l,1)
-            if self.adapterCLS_conv_weight_type == "kl":
-                roi_feat_weight_ = (roi_feat_weight+1e-4).softmax(dim=2)
-            elif self.adapterCLS_conv_weight_type == "l1":
-                roi_feat_weight_ = (roi_feat_weight+1e-4).sigmoid()
-            else:
-                raise ValueError
-            adapted_roi_feat = (roi_feat * roi_feat_weight_).sum(2) # [b,q,dim]
-        else:
-            raise ValueError
-        
-        return adapted_roi_feat, roi_feat_weight
-       
     def _temporal_pooling(self,pooling_type,coordinate,clip_feat,mask,ROIalign_size,text_feats):
         b,t,_ = coordinate.shape
         if pooling_type == "average":
@@ -435,7 +325,7 @@ class ConditionalDETR(nn.Module):
 
         return ROIalign_logits   
 
-    def forward(self, samples: NestedTensor, classes_name, description_dict, targets, epoch):
+    def forward(self, samples: NestedTensor, classes_name, description_dict):
         """ The forward expects a NestedTensor, which consists of:
                - samples.tensor: batched video, of shape [batch_size x T x C]
                - samples.mask: a binary mask of shape [batch_size x T], containing 1 (i.e., true) on padded snippet
@@ -454,14 +344,15 @@ class ConditionalDETR(nn.Module):
                                 dictionnaries containing the two above keys for each decoder layer.
         """
         if isinstance(samples, (list, torch.Tensor)):
-            samples = nested_tensor_from_tensor_list(samples)
-
+            samples = nested_tensor_from_tensor_list(samples) # [b,t,dim]
+ 
         # origin CLIP features
         clip_feat, mask = samples.decompose()
         bs,t,dim = clip_feat.shape
 
         # backbone for temporal modeling
-        feature_list, pos = self.backbone(samples) # list of [b,t,c], list of [b,t,c]
+        feature_list, pos_list = self.backbone(samples) # list of [b,t,c], list of [b,t,c]
+        feature, pos = feature_list[-1], pos_list[-1]
 
         # prepare text target
         if self.target_type != "none":
@@ -475,252 +366,70 @@ class ConditionalDETR(nn.Module):
 
                 
         # feed into model
-        src, mask = feature_list[-1].decompose()
+        src, mask = feature.decompose()
         assert mask is not None
-        src = self.input_proj(src.permute(0,2,1)).permute(0,2,1)
+        src = self.input_proj[0](src.permute(0,2,1)).permute(0,2,1)
         
-        memory, hs, reference = self.transformer(src, mask, self.query_embed.weight, pos[-1]) # [enc_layers, b,t,c], [dec_layers,b,num_queries,c], [b,num_queries,1]
+        memory, hs, reference = self.transformer(src, mask, self.query_embed.weight, pos) # [enc_layers, b,t,c], [dec_layers,b,num_queries,c], [b,num_queries,1]
 
         # record result
         out = {}
         out['memory'] = memory
         out['hs'] = hs
 
-        # #  For computing ACC use ###
-        # # compute the classification accuate of CLIP
-        # # prepare instance coordination
-        # gt_roi_feat = [] 
-        # gt_labels = []
-        # for i, t in enumerate(targets):
-        #     if len(t['segments']) > 0 :
-        #         gt_coordinations = t['segments'].unsqueeze(0) # [1,num_instance,2]->"center,width"
-        #         visual_feat_i = clip_feat[i].unsqueeze(0) # [1,T,dim]
-        #         mask_i = mask[i].unsqueeze(0) # [1,T]
-        #         roi_feat = self._roi_align(gt_coordinations,visual_feat_i,mask_i,self.ROIalign_size).squeeze(dim=0) # [1,num_instance,ROIalign_size,dim]->[num_instance,ROIalign_size,dim]
-        #         gt_roi_feat.append(roi_feat)
-        #         gt_lbl = t['semantic_labels'] # [num]
-        #         gt_labels.append(gt_lbl)
-        # if len(gt_labels) > 0:
-        #     gt_roi_feat = torch.cat(gt_roi_feat,dim=0) # [batch_instance_num,ROIalign_size,dim]
-        #     gt_roi_feat = gt_roi_feat.mean(dim=1) # [batch_instance_num,dim]
-        #     gt_labels = torch.cat(gt_labels,dim=0) # [batch_instance_num]
 
-        #     gt_logits = self._compute_similarity(gt_roi_feat,text_feats) # [batch_instance_num,num_classes]
-            
-        #     out['gt_labels'] = gt_labels
-        #     out['gt_logits'] = gt_logits
-        # #  For computing ACC use ###
+        outputs_coords = []
+        reference_before_sigmoid = inverse_sigmoid(reference) # [b,num_queries,1], Reference point is the predicted center point.
 
-        # generate the salient gt
-        if self.salient_loss:
-            if self.training: # only generate gt in training phase
-                salient_gt = torch.zeros((bs,t),device=self.device) # [bs,t]
-                salient_loss_mask = mask.clone() # [bs,t]
-
-                for i, tgt in enumerate(targets):
-                    salient_mask = tgt['salient_mask'] # [num_tgt,T]
-                    # padding the salient mask
-                    num_to_pad = t - salient_mask.shape[1]
-                    if num_to_pad > 0:
-                        padding = torch.ones((salient_mask.shape[0], num_to_pad), dtype=torch.bool, device=salient_mask.device)
-                        salient_mask = torch.cat((salient_mask, padding), dim=1)
-
-                    for salient_mask_j in salient_mask:
-                        salient_gt[i,:] = (salient_gt[i,:] + (~salient_mask_j).float()).clamp(0,1)
+        for lvl in range(hs.shape[0]):
+            tmp = self.bbox_embed[lvl](hs[lvl]) # [b,num_queries,2], tmp is the predicted offset value.
+            tmp[..., :1] += reference_before_sigmoid # [b,num_queries,2], only the center coordination add reference point
+            outputs_coord = tmp.sigmoid() # [b,num_queries,2]
+            outputs_coords.append(outputs_coord)
+        outputs_coord = torch.stack(outputs_coords) # [dec_layers,b,num_queries,2]
+        out['pred_boxes'] = outputs_coord[-1]
 
 
-                out['salient_gt'] = salient_gt
-                out['salient_loss_mask'] = salient_loss_mask
-            
-            salient_logits = self.salient_head(memory[-1].permute(0,2,1)).permute(0,2,1) # [b,t,1]
-            out['salient_logits'] = salient_logits
-        
-
-
-        # refine encoder
-        if self.enable_refine:
-            if self.refine_actionness_loss:
-                reference_before_sigmoid = inverse_sigmoid(reference) # [b,num_queries,1], Reference point is the predicted center point.
-                # tmp = self.bbox_embed_refine(hs[-1]) # [b,num_queries,2], tmp is the predicted offset value.
-                tmp = self.bbox_embed(hs[-1]) # for shared propsoal generation head
-                tmp[..., :1] += reference_before_sigmoid # [b,num_queries,2], only the center coordination add reference point
-                outputs_coord = tmp.sigmoid() # [b,num_queries,2]
-                out['pred_boxes_refine'] = outputs_coord
-                roi_pos = self._roi_align(outputs_coord,pos[-1],mask,self.ROIalign_size) # [bs,num_queries,ROIalign_size,dim]
-                roi_feat = self._roi_align(outputs_coord,clip_feat,mask,self.ROIalign_size) # [bs,num_queries,ROIalign_size,dim]
-    
-                if self.actionness_loss or self.eval_proposal or self.enable_classAgnostic:
-                    # compute the class-agnostic foreground score
-                    # actionness_logits = self.actionness_embed_refine(hs[-1]) # [b,num_queries,2]
-                    actionness_logits = self.actionness_embed(hs[-1]) # for shared propsoal generation head
-                    out['actionness_logits_refine'] = actionness_logits
-
-                b,q,l,d = roi_feat.shape
-                refine_hs = self.refine_decoder(hs[-1],clip_feat,roi_feat,
-                                        video_feat_key_padding_mask=mask,
-                                        video_pos=pos[-1],
-                                        roi_pos=roi_pos)
-
-                refine_hs = hs[-1] + refine_hs
-                reference_before_sigmoid = inverse_sigmoid(reference) # [b,num_queries,1], Reference point is the predicted center point.
-                tmp = self.bbox_embed(refine_hs) # [b,num_queries,2], tmp is the predicted offset value.
-                tmp[..., :1] += reference_before_sigmoid # [b,num_queries,2], only the center coordination add reference point
-                outputs_coord_refined = tmp.sigmoid() # [b,num_queries,2]
-                out['pred_boxes'] = outputs_coord_refined
-
-                if self.actionness_loss or self.eval_proposal or self.enable_classAgnostic:
-                    # compute the class-agnostic foreground score
-                    actionness_logits = self.actionness_embed(refine_hs) # [b,num_queries,2]
-                    out['actionness_logits'] = actionness_logits
-            else:
-                with torch.no_grad():
-                    reference_before_sigmoid = inverse_sigmoid(reference) # [b,num_queries,1], Reference point is the predicted center point.
-                    tmp = self.bbox_embed(hs[-1]) # [b,num_queries,2], tmp is the predicted offset value.
-                    tmp[..., :1] += reference_before_sigmoid # [b,num_queries,2], only the center coordination add reference point
-                    outputs_coord = tmp.sigmoid() # [b,num_queries,2]
-                    roi_pos = self._roi_align(outputs_coord,pos[-1],mask,self.ROIalign_size) # [bs,num_queries,ROIalign_size,dim]
-                    roi_feat = self._roi_align(outputs_coord,clip_feat,mask,self.ROIalign_size) # [bs,num_queries,ROIalign_size,dim]
-
-                # out['pred_boxes_dynamic'] = outputs_coord
-
-                b,q,l,d = roi_feat.shape
-                refine_hs = self.refine_decoder(hs[-1],clip_feat,roi_feat,
-                                        video_feat_key_padding_mask=mask,
-                                        video_pos=pos[-1],
-                                        roi_pos=roi_pos)
-
-                refine_hs = hs[-1] + refine_hs
-                reference_before_sigmoid = inverse_sigmoid(reference) # [b,num_queries,1], Reference point is the predicted center point.
-                tmp = self.bbox_embed(refine_hs) # [b,num_queries,2], tmp is the predicted offset value.
-                tmp[..., :1] += reference_before_sigmoid # [b,num_queries,2], only the center coordination add reference point
-                outputs_coord_refined = tmp.sigmoid() # [b,num_queries,2]
-                out['pred_boxes'] = outputs_coord_refined
-
-                if self.actionness_loss or self.eval_proposal or self.enable_classAgnostic:
-                    # compute the class-agnostic foreground score
-                    actionness_logits = self.actionness_embed(refine_hs) # [b,num_queries,2]
-                    out['actionness_logits'] = actionness_logits
-
-                if not self.eval_proposal and not self.enable_classAgnostic:
-                    if self.target_type != "none":
-                        class_emb = self.class_embed(refine_hs) # [dec_layers,b,num_queries,dim]->[b,num_queries,dim]
-                        b,n,dim = class_emb.shape
-                        if self.dynamic_element_catch:
-                            dynamic_element_feat = self.dynamic_elements.weight.unsqueeze(1).expand(self.dynamic_element_num, b, dim) # [dynamic_element_nums,bs, dim]
-                            class_emb = class_emb.permute(1,0,2)
-                            region_dynamic = self.dynamic_fusion(query=class_emb, key=dynamic_element_feat, value=dynamic_element_feat)[0] # [num_queries, b, dim]
-                            region_dynamic = region_dynamic.permute(1,0,2) # [b,num_queries,dim]
-                            class_logits = self._compute_similarity(region_dynamic, text_feats) # [b,num_queries,num_classes]
-                        else:
-                            class_logits = self._compute_similarity(class_emb, text_feats) # [b,num_queries,num_classes]
-                    else:
-                        class_logits = self.class_embed(hs) # [dec_layers,b,num_queries,dim]->[b,num_queries,num_classes]
-                    out['class_logits'] = class_logits
-
-
+        if self.target_type != "none":
+            outputs_embed = torch.stack([self.class_embed[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,dim]
+            outputs_logit = self._compute_similarity(outputs_embed, text_feats) # [dec_layers, b,num_queries,num_classes]
         else:
-            reference_before_sigmoid = inverse_sigmoid(reference) # [b,num_queries,1], Reference point is the predicted center point.
-            outputs_coords = []
-            for lvl in range(hs.shape[0]):
-                tmp = self.bbox_embed(hs[lvl]) # [b,num_queries,2], tmp is the predicted offset value.
-                tmp[..., :1] += reference_before_sigmoid # [b,num_queries,2], only the center coordination add reference point
-                outputs_coord = tmp.sigmoid() # [b,num_queries,2]
-                outputs_coords.append(outputs_coord)
-            outputs_coord = torch.stack(outputs_coords) # [dec_layers,b,num_queries,2]
-            out['pred_boxes'] = outputs_coord[-1]
+            outputs_logit = torch.stack([self.class_embed[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,dim]
+            outputs_embed = [None]
+        out['class_logits'] = outputs_logit[-1]
+        out['class_embs'] = outputs_embed[-1]
 
-            if self.actionness_loss or self.eval_proposal or self.enable_classAgnostic:
-                # compute the class-agnostic foreground score
-                actionness_logits = self.actionness_embed(hs)[-1] # [dec_layers,b,num_queries,1]->[b,num_queries,2]
-                out['actionness_logits'] = actionness_logits
-        
 
-            if not self.eval_proposal and not self.enable_classAgnostic:
-                if self.target_type != "none":
-                    class_emb = self.class_embed(hs)[-1] # [dec_layers,b,num_queries,dim]->[b,num_queries,dim]
-                    b,n,dim = class_emb.shape
-                    if self.dynamic_element_catch:
-                        dynamic_element_feat = self.dynamic_elements.weight.unsqueeze(1).expand(self.dynamic_element_num, b, dim) # [dynamic_element_nums,bs, dim]
-                        class_emb = class_emb.permute(1,0,2)
-                        region_dynamic = self.dynamic_fusion(query=class_emb, key=dynamic_element_feat, value=dynamic_element_feat)[0] # [num_queries, b, dim]
-                        region_dynamic = region_dynamic.permute(1,0,2) # [b,num_queries,dim]
-                        class_logits = self._compute_similarity(region_dynamic, text_feats) # [b,num_queries,num_classes]
-                    else:
-                        class_logits = self._compute_similarity(class_emb, text_feats) # [b,num_queries,num_classes]
-                else:
-                    class_logits = self.class_embed(hs)[-1] # [dec_layers,b,num_queries,dim]->[b,num_queries,num_classes]
-                out['class_logits'] = class_logits
-
-        # adopt adapterCLS_loss
-        if self.adapterCLS_loss:
-            with torch.no_grad():
-                adapter_roi_pos = self._roi_align(out['pred_boxes'],pos[-1],mask,self.ROIalign_size) # [bs,num_queries,ROIalign_size,dim]
-                adapter_roi_feat = self._roi_align(out['pred_boxes'],clip_feat + 1e-4,mask,self.ROIalign_size) # [bs,num_queries,ROIalign_size,dim]
-
-            adapted_roi_feat,roi_feat_weight = self._adapter_forward(adapter_roi_feat, adapter_roi_pos) # [b,q,dim], [b,q,l,1]
-            if self.adapterCLS_type == "conv_weight":
-                out['roi_feat_weight'] = roi_feat_weight # [b,q,l,1]
-                out['roi_feat_logits'] = self._compute_similarity(adapter_roi_feat,text_feats) # [b,q,l,c]
-            if self.adapterCLS_type == "conv_add_verbs":
-                if self.adapterCLS_conv_add_verbs_type == "concat":
-                    adapted_roi_feat = torch.cat([adapter_roi_feat.mean(2), self.adapterCLS_conv_add_verbs_coef * adapted_roi_feat],dim=-1) # [b,q,2*dim]
-                    text_feats = torch.cat([text_feats, self.adapterCLS_conv_add_verbs_coef * self.learnable_verbs.weight.expand_as(text_feats)],dim=-1) # [n classes,2*dim]
-                elif self.adapterCLS_conv_add_verbs_type == "sum":
-                    adapted_roi_feat = adapter_roi_feat.mean(2) + self.adapterCLS_conv_add_verbs_coef * adapted_roi_feat # [b,q,dim]
-                    text_feats = text_feats + self.adapterCLS_conv_add_verbs_coef * self.learnable_verbs.weight.expand_as(text_feats) # [n classes,2*dim]
-                elif self.adapterCLS_conv_add_verbs_type == "sum1":
-                    adapted_roi_feat = adapter_roi_feat.mean(2) + self.adapterCLS_conv_add_verbs_coef * adapted_roi_feat # [b,q,dim]
-                    text_feats = text_feats # [n classes,2*dim]
-                else:
-                    raise ValueError
-            adapted_roi_feat_logits = self._compute_similarity(adapted_roi_feat,text_feats) # [b,q,c]
-            out['adapted_roi_feat_logits'] = adapted_roi_feat_logits
+        if self.actionness_loss :
+            # compute the class-agnostic foreground score
+            actionness_logits = torch.stack([self.actionness_embed[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,dim]
+            out['actionness_logits'] = actionness_logits[-1]
+    
 
         if self.training:
             if self.distillation_loss:
-                out['student_emb'] = class_emb # [b,num_queries,num_classes]
+                out['student_emb'] = out['class_embs'] # [b,num_queries,num_classes]
 
                 visual_feats = clip_feat
                 roi_feat = self._roi_align(out['pred_boxes'],visual_feats,mask,self.ROIalign_size).squeeze() # [bs,num_queries,ROIalign_size,dim]
-                b,q,l,d = roi_feat.shape
                 teacher_emb = roi_feat.mean(dim=2) # [b,q,d]
                 out['teacher_emb'] = teacher_emb
 
-
-        # obtain the ROIalign logits
-        if not self.training: # only in inference stage
-            
-            # out['pred_boxes'] = out['pred_boxes_dynamic']
-
-            if self.enable_classAgnostic:
-                # fixed_text_feats = self.get_text_feats(classes_name, description_dict, self.device, self.target_type) # [N classes,dim]
-
-                if self.adapterCLS_loss:
-                    ROIalign_logits = out['adapted_roi_feat_logits']
-                else:
-                    ROIalign_logits = self._temporal_pooling(self.pooling_type, out['pred_boxes'], clip_feat, mask, self.ROIalign_size, text_feats)
-                
-                out['class_logits'] = ROIalign_logits 
-            elif self.eval_proposal:
-                pass
-            # elif self.actionness_loss:
-            #     if self.dynamic_element_catch:
-            #         ROIalign_logits = self.dynamic_coef*out['class_logits'] + self._temporal_pooling(self.pooling_type, out['pred_boxes'], clip_feat, mask, self.ROIalign_size, text_feats)
-            #     else:
-            #         ROIalign_logits = self._temporal_pooling(self.pooling_type, out['pred_boxes'], clip_feat, mask, self.ROIalign_size, text_feats)
-            #     out['class_logits'] = ROIalign_logits 
-            else:
-                assert "class_logits" in out, "please check the code of self.class_embed"
-            
+        if self.aux_loss:
+            out['aux_outputs'] = self._set_aux_loss(
+                outputs_logit, outputs_coord)
 
         return out
 
     @torch.jit.unused
-    def _set_aux_loss(self, outputs_class, outputs_coord):
+    def _set_aux_loss(self, class_logits, outputs_coord, actionness_logits=None):
         # this is a workaround to make torchscript happy, as torchscript
         # doesn't support dictionary with non-homogeneous values, such
         # as a dict having both a Tensor and a list.
-        return [{'pred_logits': a, 'pred_boxes': b} for a, b in zip(outputs_class[:-1], outputs_coord[:-1])]
+        if actionness_logits!=None:
+            return [{'class_logits': a, 'pred_boxes': b, 'actionness_logits': c} for a, b, c in zip(class_logits[:-1], outputs_coord[:-1], actionness_logits[:-1])]
+        else:
+            return [{'class_logits': a, 'pred_boxes': b} for a, b in zip(class_logits[:-1], outputs_coord[:-1])]
 
 
 
@@ -738,19 +447,14 @@ def build(args, device):
         text_encoder, logit_scale = build_text_encoder(args,device)
     else:
         raise NotImplementedError
+    
     backbone = build_backbone(args)
     transformer = build_transformer(args)
-    # semantic_vhead,semantic_thead = build_semantic_head(args)
-    if args.enable_refine:
-        refine_decoder = build_refine_decoder(args)
-    else:
-        refine_decoder = None
 
     model = ConditionalDETR(
         backbone,
         transformer,
         text_encoder,
-        refine_decoder,
         logit_scale,
         device=device,
         num_classes=num_classes,
@@ -761,15 +465,8 @@ def build(args, device):
     weight_dict = {'loss_ce': args.cls_loss_coef, 'loss_bbox': args.bbox_loss_coef}
     weight_dict['loss_giou'] = args.giou_loss_coef
     
-    if args.actionness_loss or args.eval_proposal or args.enable_classAgnostic:
+    if args.actionness_loss:
         weight_dict['loss_actionness'] = args.actionness_loss_coef
-    if args.salient_loss:
-        weight_dict['loss_salient'] = args.salient_loss_coef
-    if args.adapterCLS_loss:
-        weight_dict['loss_adapterCLS'] = args.adapterCLS_loss_coef
-    if args.refine_actionness_loss:
-        weight_dict['loss_actionness_refine'] = args.refine_actionness_loss_coef
-        weight_dict['loss_bbox_refine'] = args.refine_actionness_loss_coef
     if args.distillation_loss:
         weight_dict['loss_distillation'] = args.distillation_loss_coef
 

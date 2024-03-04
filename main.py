@@ -23,7 +23,8 @@ import numpy as np
 from tqdm import tqdm
 from utils.util import get_logger, setup_seed, write_to_csv
 import dataset
-from models.ConditionalDetr import build_model
+from models.ConditionalDetr import build_model as build_ConditionalDetr
+from models.DeformableDetr import build_model as build_DeformableDetr
 from train import train
 from test import test
 from tqdm import tqdm
@@ -89,10 +90,13 @@ if __name__ == '__main__':
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, collate_fn=collate_fn, num_workers=args.num_workers, pin_memory=True, shuffle=True, drop_last=True)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, collate_fn=collate_fn, num_workers=args.num_workers, pin_memory=True, shuffle=False, drop_last=False)
-    train_val_loader = DataLoader(train_dataset, batch_size=args.batch_size, collate_fn=collate_fn, num_workers=args.num_workers, pin_memory=True, shuffle=False, drop_last=False)
 
     # load model
-    model, criterion, postprocessor = build_model(args,device)
+    build_func = {
+        'ConditionalDetr': build_ConditionalDetr,
+        'DeformableDetr': build_DeformableDetr
+    }
+    model, criterion, postprocessor = build_func[args.detr_architecture](args, device)
     model.to(device)
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f'number of params: {n_parameters/1000000} M')
@@ -118,14 +122,6 @@ if __name__ == '__main__':
             epoch_loss_dict_scaled = train(model=model, criterion=criterion, data_loader=train_loader, optimizer=optimizer, device=device, epoch=epoch, max_norm=args.clip_max_norm)
             lr_scheduler.step()
             torch.save(model.state_dict(), os.path.join('./ckpt/',args.dataset_name,'last_' + args.model_name + '.pkl'))
-
-            if epoch % args.train_interval == 0 and args.train_interval != -1:
-                train_stats = test(model=model,criterion=criterion,postprocessor=postprocessor,data_loader=train_val_loader,dataset_name=args.dataset_name,epoch=epoch,device=device,args=args)
-                logger.info('||'.join(['Train map @ {} = {:.3f} '.format(train_stats['iou_range'][i],train_stats['per_iou_ap_raw'][i]*100) for i in range(len(train_stats['iou_range']))]))
-                logger.info('Intermediate Train mAP Avg ALL: {}'.format(train_stats['mAP_raw']*100))
-                logger.info('Intermediate Train AR@1: {}, AR@5: {}, AR@10: {}, AR@50:{}, AR@100:{}, AUC@100:{}'.format(train_stats['AR@1_raw']*100, train_stats['AR@5_raw']*100,train_stats['AR@10_raw']*100,train_stats['AR@50_raw']*100,train_stats['AR@100_raw']*100,train_stats['AUC_raw']*100))
-                write_to_csv(os.path.join('./results/excel',args.dataset_name,args.model_name), train_stats, epoch)
-
             
             if epoch % args.test_interval == 0 and args.test_interval != -1:
                 test_stats = test(model=model,criterion=criterion,postprocessor=postprocessor,data_loader=val_loader,dataset_name=args.dataset_name,epoch=epoch,device=device,args=args)

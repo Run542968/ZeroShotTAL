@@ -124,8 +124,7 @@ class Transformer(nn.Module):
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p)
 
-    def forward(self, src, mask, query_embed, pos_embed, 
-                clip_feat=None, bbox_function=None, refine_decoder=None):
+    def forward(self, src, mask, query_embed, pos_embed):
         '''
         input:
             src: [b,t,c]
@@ -149,8 +148,7 @@ class Transformer(nn.Module):
 
         memory = self.encoder(src, src_key_padding_mask=mask, pos=pos_embed) # [layers,t,b,c]
         hs, references = self.decoder(tgt, memory[-1], memory_key_padding_mask=mask, 
-                          pos=pos_embed, query_pos=query_embed,
-                          clip_feat=clip_feat, bbox_function=bbox_function, refine_decoder=refine_decoder) # [dec_layers,b,num_queries,c] [b,num_queries,1]
+                          pos=pos_embed, query_pos=query_embed) # [dec_layers,b,num_queries,c] [b,num_queries,1]
         # permute TxNxC to NxTxC
         memory = memory.permute(0,2,1,3)
         return memory, hs, references
@@ -218,8 +216,7 @@ class TransformerDecoder(nn.Module):
                 tgt_key_padding_mask: Optional[Tensor] = None,
                 memory_key_padding_mask: Optional[Tensor] = None,
                 pos: Optional[Tensor] = None,
-                query_pos: Optional[Tensor] = None,
-                clip_feat=None, bbox_function=None, refine_decoder=None):
+                query_pos: Optional[Tensor] = None):
         '''
             tgt: [num_queries,b,c]
             memory: [t,b,c]
@@ -526,7 +523,7 @@ def build_transformer(args):
         dim_feedforward=args.dim_feedforward,
         num_encoder_layers=args.enc_layers,
         num_decoder_layers=args.dec_layers,
-        normalize_before=args.pre_norm,
+        normalize_before=False,
         return_intermediate_enc=True,
         return_intermediate_dec=True,
         args=args

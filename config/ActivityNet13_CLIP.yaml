@@ -10,3 +10,4 @@ feature_path: "/mnt/Datasets/ActivityNet13/CLIP_feature"
 feature_stride: 16
 feature_type: "CLIP"
 num_classes: 200
+rescale_length: 300
