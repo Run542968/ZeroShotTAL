@@ -46,6 +46,21 @@ class MLP(nn.Module):
             x = F.relu(layer(x)) if i < self.num_layers - 1 else layer(x)
         return x
 
+class ProbObjectnessHead(nn.Module):
+    def __init__(self, hidden_dim):
+        super().__init__()
+        self.flatten = nn.Flatten(0,1)
+        self.objectness_bn = nn.BatchNorm1d(hidden_dim, affine=False)
+
+    def freeze_prob_model(self):
+        self.objectness_bn.eval()
+        
+    def forward(self, x):
+        out=self.flatten(x)
+        out=self.objectness_bn(out).unflatten(0, x.shape[:2])
+        return out.norm(dim=-1)**2
+    
+
 def _get_clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 
@@ -99,6 +114,9 @@ class ConditionalDETR(nn.Module):
 
 
         self.distillation_loss = args.distillation_loss
+        self.salient_loss = args.salient_loss
+        self.compact_loss = args.compact_loss
+
 
         hidden_dim = transformer.d_model
 
@@ -152,6 +170,16 @@ class ConditionalDETR(nn.Module):
             bias_value = -math.log((1 - prior_prob) / prior_prob)
             self.actionness_embed.bias.data = torch.ones(1) * bias_value
 
+        if self.salient_loss:
+            self.salient_head = nn.Sequential(
+                nn.Conv1d(hidden_dim, hidden_dim, kernel_size=3, padding=1),
+                nn.LeakyReLU(0.2),
+                nn.Conv1d(hidden_dim, 1, kernel_size=1)
+            )
+
+        if self.compact_loss:
+            self.compact_head = ProbObjectnessHead(hidden_dim)
+
 
         # following TadTR
         num_pred = transformer.decoder.num_layers
@@ -162,13 +190,16 @@ class ConditionalDETR(nn.Module):
                 self.bbox_embed[0].layers[-1].bias.data[1:], -2.0)
             if self.actionness_loss:
                 self.actionness_embed = _get_clones(self.actionness_embed, num_pred)
+            if self.compact_loss:
+                self.compact_head =  _get_clones(self.compact_head, num_pred)
         else: # shared parameters for each laryer
             self.class_embed = nn.ModuleList([self.class_embed for _ in range(num_pred)])
             nn.init.constant_(self.bbox_embed.layers[-1].bias.data[1:], -2.0)
             self.bbox_embed = nn.ModuleList([self.bbox_embed for _ in range(num_pred)])
             if self.actionness_loss:
                 self.actionness_embed = nn.ModuleList([self.actionness_embed for _ in range(num_pred)])
-
+            if self.compact_loss:
+                self.compact_head = nn.ModuleList([self.compact_head for _ in range(num_pred)])
 
         if self.target_type != "none":
             logger.info(f"The target_type is {self.target_type}, using text embedding as target, on task: {args.task}!")
@@ -325,7 +356,7 @@ class ConditionalDETR(nn.Module):
 
         return ROIalign_logits   
 
-    def forward(self, samples: NestedTensor, classes_name, description_dict):
+    def forward(self, samples: NestedTensor, classes_name, description_dict, targets):
         """ The forward expects a NestedTensor, which consists of:
                - samples.tensor: batched video, of shape [batch_size x T x C]
                - samples.mask: a binary mask of shape [batch_size x T], containing 1 (i.e., true) on padded snippet
@@ -402,9 +433,13 @@ class ConditionalDETR(nn.Module):
 
         if self.actionness_loss :
             # compute the class-agnostic foreground score
-            actionness_logits = torch.stack([self.actionness_embed[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,dim]
+            actionness_logits = torch.stack([self.actionness_embed[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,1]
             out['actionness_logits'] = actionness_logits[-1]
-    
+
+        if self.compact_loss:
+            compact_logits = torch.stack([self.compact_head[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries]
+            out['compact_logits'] = compact_logits[-1] # [b, num_queries]
+
 
         if self.training:
             if self.distillation_loss:
@@ -414,6 +449,29 @@ class ConditionalDETR(nn.Module):
                 roi_feat = self._roi_align(out['pred_boxes'],visual_feats,mask,self.ROIalign_size).squeeze() # [bs,num_queries,ROIalign_size,dim]
                 teacher_emb = roi_feat.mean(dim=2) # [b,q,d]
                 out['teacher_emb'] = teacher_emb
+
+            if self.salient_loss:
+                salient_gt = torch.zeros((bs,t),device=self.device) # [bs,t]
+                salient_loss_mask = mask.clone() # [bs,t]
+
+                for i, tgt in enumerate(targets):
+                    salient_mask = tgt['salient_mask'] # [num_tgt,T]
+                    # padding the salient mask
+                    num_to_pad = t - salient_mask.shape[1]
+                    if num_to_pad > 0:
+                        padding = torch.ones((salient_mask.shape[0], num_to_pad), dtype=torch.bool, device=salient_mask.device)
+                        salient_mask = torch.cat((salient_mask, padding), dim=1)
+
+                    for salient_mask_j in salient_mask:
+                        salient_gt[i,:] = (salient_gt[i,:] + (~salient_mask_j).float()).clamp(0,1)
+
+
+                out['salient_gt'] = salient_gt
+                out['salient_loss_mask'] = salient_loss_mask
+            
+                salient_logits = self.salient_head(memory[-1].permute(0,2,1)).permute(0,2,1) # [b,t,1]
+                out['salient_logits'] = salient_logits
+
 
         if self.aux_loss:
             out['aux_outputs'] = self._set_aux_loss(
@@ -469,6 +527,8 @@ def build(args, device):
         weight_dict['loss_actionness'] = args.actionness_loss_coef
     if args.distillation_loss:
         weight_dict['loss_distillation'] = args.distillation_loss_coef
+    if args.compact_loss:
+        weight_dict['loss_compact'] = args.compact_loss_coef
 
     # TODO this is a hack
     if args.aux_loss:

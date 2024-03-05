@@ -3,6 +3,7 @@ from utils.segment_ops import segment_cw_to_t1t2,segment_iou
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
+import math
 
 def sigmoid_focal_loss(inputs, targets, num_boxes, alpha: float = 0.25, gamma: float = 2):
     """
@@ -58,6 +59,10 @@ class SetCriterion(nn.Module):
         self.actionness_loss = args.actionness_loss 
 
         self.distillation_loss = args.distillation_loss
+        self.salient_loss = args.salient_loss
+        self.salient_loss_impl = args.salient_loss_impl
+        self.compact_loss = args.compact_loss
+        self.min_obj=-args.hidden_dim*math.log(0.9)
 
         if self.actionness_loss:
             self.base_losses = ['labels','actionness','boxes']
@@ -154,6 +159,56 @@ class SetCriterion(nn.Module):
             losses['class_error'] = 100 - accuracy(src_logits[idx], target_classes_o)[0] # [batch_matched_queries,num_classes]
         return losses
 
+    def loss_salient(self, outputs, targets, indices, num_boxes, log=True):
+        """
+            Rank loss, for fine-grained boundary perception
+            NOTE: If the num_queries is so small, can not cover all gt, an error will appear here
+        """
+
+        assert 'salient_logits' in outputs
+        assert 'salient_loss_mask' in outputs
+        assert 'salient_gt' in outputs
+        salient_logits = outputs['salient_logits'] # [bs,t,1]
+        salient_logits = salient_logits.squeeze(dim=2) # [bs,t]
+        mask = outputs['salient_loss_mask'] # [bs,t]
+        salient_gt = outputs['salient_gt'] # [bs,t]
+
+        if self.salient_loss_impl == "BCE":
+            prob = salient_logits.sigmoid() # [bs,t]
+            ce_loss = F.binary_cross_entropy_with_logits(salient_logits, salient_gt, reduction="none")
+            p_t = prob * salient_gt + (1 - prob) * (1 - salient_gt) # [bs,t]
+            loss = ce_loss * ((1 - p_t) ** self.gamma)
+
+            if self.focal_alpha >= 0:
+                alpha_t = self.focal_alpha * salient_gt + (1 - self.focal_alpha) * (1 - salient_gt)
+                loss = alpha_t * loss
+
+            un_mask = ~mask
+            loss_salient = loss*un_mask
+
+            loss_salient = loss_salient.mean(1).sum() / num_boxes 
+
+        elif self.salient_loss_impl == "CE":
+
+            salient_gt = salient_gt / (torch.sum(salient_gt, dim=1, keepdim=True) + 1e-4) # [b,t]
+
+            loss_salient = -(salient_gt * F.log_softmax(salient_logits, dim=-1)) # [b,t]
+            
+            un_mask = ~mask
+            loss_salient = loss_salient*un_mask
+            loss_salient = loss_salient.sum(dim=1).mean()
+        else:
+            raise ValueError
+ 
+        losses = {'loss_salient': loss_salient}
+
+        return losses
+
+    def loss_compact(self, outputs, targets, indices, num_boxes):
+        assert "compact_logits" in outputs
+        idx = self._get_src_permutation_idx(indices)
+        pred_obj = outputs["compact_logits"][idx]
+        return  {'loss_compact': torch.clamp(pred_obj, min=self.min_obj).sum()/ num_boxes}
 
     def _get_src_permutation_idx(self, indices):
         # permute predictions following indices
@@ -238,7 +293,15 @@ class SetCriterion(nn.Module):
         if self.distillation_loss:
             distillation_loss = self.loss_distillation(outputs, targets, indices, num_boxes)
             losses.update(distillation_loss)
+        
+        if self.salient_loss:
+            salient_loss = self.loss_salient(outputs, targets, indices, num_boxes)
+            losses.update(salient_loss)
 
+        if self.compact_loss:
+            compact_loss = self.loss_compact(outputs, targets, indices, num_boxes)
+            losses.update(compact_loss)
+            
         return losses
 
 def build_criterion(args,num_classes,matcher,weight_dict):

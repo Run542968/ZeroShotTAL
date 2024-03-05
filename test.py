@@ -42,7 +42,7 @@ def test(model,
         classes = data_loader.dataset.classes
         description_dict = data_loader.dataset.description_dict
 
-        outputs = model(samples, classes, description_dict)
+        outputs = model(samples, classes, description_dict, targets)
 
 
         count = count + len(targets)

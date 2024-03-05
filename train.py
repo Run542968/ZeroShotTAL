@@ -29,7 +29,7 @@ def train(model: torch.nn.Module,
         classes = data_loader.dataset.classes
         description_dict = data_loader.dataset.description_dict
 
-        outputs = model(samples, classes, description_dict)
+        outputs = model(samples, classes, description_dict, targets)
 
         loss_dict = criterion(outputs, targets)
         weight_dict = criterion.weight_dict

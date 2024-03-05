@@ -13,6 +13,8 @@ class PostProcess(nn.Module):
         self.target_type = args.target_type
         self.proposals_weight_type = args.proposals_weight_type
         self.actionness_loss = args.actionness_loss
+        self.compact_loss = args.compact_loss
+        self.temperature = 1
         self.prob_type = args.prob_type
 
     @torch.no_grad()
@@ -23,10 +25,9 @@ class PostProcess(nn.Module):
             target_sizes: tensor of dimension [batch_size x 1] containing the size of each video of the batch
         """
         out_bbox = outputs['pred_boxes'] # [bs,num_queries,2]
-        
-
         assert 'class_logits' in outputs
         class_logits = outputs['class_logits'] #  [bs,num_queries,num_classes] 
+
         if self.actionness_loss: # [bs,num_queries,1]
             assert 'actionness_logits' in outputs
             actionness_logits = outputs['actionness_logits']
@@ -43,6 +44,12 @@ class PostProcess(nn.Module):
                 prob = class_logits.softmax(-1) # [bs,num_queries,num_classes]
             else:
                 raise NotImplementedError
+        elif self.compact_loss:
+            assert 'compact_logits' in outputs
+            compact_logits = outputs['compact_logits']
+            obj_prob = torch.exp(-self.temperature*compact_logits).unsqueeze(-1)
+            prob = obj_prob*class_logits.sigmoid()
+
         else:
             if self.prob_type == "softmax":
                 prob = class_logits.softmax(-1)

@@ -38,6 +38,21 @@ import os
 def _get_clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 
+class ProbObjectnessHead(nn.Module):
+    def __init__(self, hidden_dim):
+        super().__init__()
+        self.flatten = nn.Flatten(0,1)
+        self.objectness_bn = nn.BatchNorm1d(hidden_dim, affine=False)
+
+    def freeze_prob_model(self):
+        self.objectness_bn.eval()
+        
+    def forward(self, x):
+        out=self.flatten(x)
+        out=self.objectness_bn(out).unflatten(0, x.shape[:2])
+        return out.norm(dim=-1)**2
+    
+
 
 def get_norm(norm_type, dim, num_groups=None):
     if norm_type == 'gn':
@@ -87,6 +102,8 @@ class DeformableDETR(nn.Module):
 
 
         self.distillation_loss = args.distillation_loss
+        self.salient_loss = args.salient_loss
+        self.compact_loss = args.compact_loss
 
         hidden_dim = transformer.d_model
 
@@ -123,6 +140,15 @@ class DeformableDETR(nn.Module):
             bias_value = -math.log((1 - prior_prob) / prior_prob)
             self.actionness_embed.bias.data = torch.ones(1) * bias_value
 
+        if self.salient_loss:
+            self.salient_head = nn.Sequential(
+                nn.Conv1d(hidden_dim, hidden_dim, kernel_size=3, padding=1),
+                nn.LeakyReLU(0.2),
+                nn.Conv1d(hidden_dim, 1, kernel_size=1)
+            )
+
+        if self.compact_loss:
+            self.compact_head = ProbObjectnessHead(hidden_dim)
 
 
         num_pred = transformer.decoder.num_layers
@@ -130,6 +156,8 @@ class DeformableDETR(nn.Module):
             self.class_embed = _get_clones(self.class_embed, num_pred)
             if self.actionness_loss:
                 self.actionness_embed = _get_clones(self.actionness_embed, num_pred)
+            if self.compact_loss:
+                self.compact_head =  _get_clones(self.compact_head, num_pred)
             self.bbox_embed = _get_clones(self.bbox_embed, num_pred)
             nn.init.constant_(
                 self.bbox_embed[0].layers[-1].bias.data[1:], -2.0)
@@ -143,6 +171,8 @@ class DeformableDETR(nn.Module):
             if self.actionness_loss:
                 self.actionness_embed = nn.ModuleList(
                     [self.actionness_embed for _ in range(num_pred)])
+            if self.compact_loss:
+                self.compact_head = nn.ModuleList([self.compact_head for _ in range(num_pred)])
             self.bbox_embed = nn.ModuleList(
                 [self.bbox_embed for _ in range(num_pred)])
             self.transformer.decoder.bbox_embed = None
@@ -298,7 +328,7 @@ class DeformableDETR(nn.Module):
 
         return ROIalign_logits   
 
-    def forward(self, samples: NestedTensor, classes_name, description_dict):
+    def forward(self, samples: NestedTensor, classes_name, description_dict, targets):
         """ The forward expects a NestedTensor, which consists of:
                - samples.tensors: batched images, of shape [batch_size x C x T]
                - samples.mask: a binary mask of shape [batch_size x T], containing 1 on padded pixels
@@ -337,13 +367,15 @@ class DeformableDETR(nn.Module):
         pos = [self.position_embedding(samples).permute(0,2,1)] # [b,dim,t]
         # origin CLIP features
         clip_feat, mask = samples.tensors, samples.mask  # [b,t,dim], [b,t]
+        bs, t, dim = clip_feat.shape
  
         srcs = [self.input_proj[0](clip_feat.permute(0,2,1))] # low-level Conv1d  [b,dim,t]
         masks = [mask]
 
         query_embeds = self.query_embed.weight # [n,2*dim]
 
-        hs, init_reference, inter_references, memory = self.transformer(srcs, masks, pos, query_embeds)
+        hs, init_reference, inter_references, memory = self.transformer(srcs, masks, pos, query_embeds) # hs: [dec_layer, bs, num_queries, dim], init_reference: [bs, num_queries,1], inter_references: [dec_layer, bs, num_queries, 1], memory: [b,dim,t] 
+
         # record result
         out = {}
         out['memory'] = memory
@@ -388,6 +420,9 @@ class DeformableDETR(nn.Module):
             actionness_logits = torch.stack([self.actionness_embed[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,dim]
             out['actionness_logits'] = actionness_logits[-1]
     
+        if self.compact_loss:
+            compact_logits = torch.stack([self.compact_head[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries]
+            out['compact_logits'] = compact_logits[-1] # [b, num_queries]
 
         if self.training:
             if self.distillation_loss:
@@ -397,6 +432,30 @@ class DeformableDETR(nn.Module):
                 roi_feat = self._roi_align(out['pred_boxes'],visual_feats,mask,self.ROIalign_size).squeeze() # [bs,num_queries,ROIalign_size,dim]
                 teacher_emb = roi_feat.mean(dim=2) # [b,q,d]
                 out['teacher_emb'] = teacher_emb
+
+            if self.salient_loss:
+                salient_gt = torch.zeros((bs,t),device=self.device) # [bs,t]
+                salient_loss_mask = mask.clone() # [bs,t]
+
+                for i, tgt in enumerate(targets):
+                    salient_mask = tgt['salient_mask'] # [num_tgt,T]
+                    # padding the salient mask
+                    num_to_pad = t - salient_mask.shape[1]
+                    if num_to_pad > 0:
+                        padding = torch.ones((salient_mask.shape[0], num_to_pad), dtype=torch.bool, device=salient_mask.device)
+                        salient_mask = torch.cat((salient_mask, padding), dim=1)
+
+                    for salient_mask_j in salient_mask:
+                        salient_gt[i,:] = (salient_gt[i,:] + (~salient_mask_j).float()).clamp(0,1)
+
+
+                out['salient_gt'] = salient_gt
+                out['salient_loss_mask'] = salient_loss_mask
+            
+                salient_logits = self.salient_head(memory).permute(0,2,1) # [b,t,1]
+                out['salient_logits'] = salient_logits
+
+
 
         if self.aux_loss:
             out['aux_outputs'] = self._set_aux_loss(
@@ -441,6 +500,10 @@ class SetCriterion(nn.Module):
         self.actionness_loss = args.actionness_loss 
 
         self.distillation_loss = args.distillation_loss
+        self.salient_loss = args.salient_loss
+        self.salient_loss_impl = args.salient_loss_impl
+        self.compact_loss = args.compact_loss
+        self.min_obj=-args.hidden_dim*math.log(0.9)
 
         if self.actionness_loss:
             self.base_losses = ['labels','actionness','boxes']
@@ -537,6 +600,56 @@ class SetCriterion(nn.Module):
             losses['class_error'] = 100 - accuracy(src_logits[idx], target_classes_o)[0] # [batch_matched_queries,num_classes]
         return losses
 
+    def loss_salient(self, outputs, targets, indices, num_boxes, log=True):
+        """
+            Rank loss, for fine-grained boundary perception
+            NOTE: If the num_queries is so small, can not cover all gt, an error will appear here
+        """
+
+        assert 'salient_logits' in outputs
+        assert 'salient_loss_mask' in outputs
+        assert 'salient_gt' in outputs
+        salient_logits = outputs['salient_logits'] # [bs,t,1]
+        salient_logits = salient_logits.squeeze(dim=2) # [bs,t]
+        mask = outputs['salient_loss_mask'] # [bs,t]
+        salient_gt = outputs['salient_gt'] # [bs,t]
+
+        if self.salient_loss_impl == "BCE":
+            prob = salient_logits.sigmoid() # [bs,t]
+            ce_loss = F.binary_cross_entropy_with_logits(salient_logits, salient_gt, reduction="none")
+            p_t = prob * salient_gt + (1 - prob) * (1 - salient_gt) # [bs,t]
+            loss = ce_loss * ((1 - p_t) ** self.gamma)
+
+            if self.focal_alpha >= 0:
+                alpha_t = self.focal_alpha * salient_gt + (1 - self.focal_alpha) * (1 - salient_gt)
+                loss = alpha_t * loss
+
+            un_mask = ~mask
+            loss_salient = loss*un_mask
+
+            loss_salient = loss_salient.mean(1).sum() / num_boxes 
+
+        elif self.salient_loss_impl == "CE":
+
+            salient_gt = salient_gt / (torch.sum(salient_gt, dim=1, keepdim=True) + 1e-4) # [b,t]
+
+            loss_salient = -(salient_gt * F.log_softmax(salient_logits, dim=-1)) # [b,t]
+            
+            un_mask = ~mask
+            loss_salient = loss_salient*un_mask
+            loss_salient = loss_salient.sum(dim=1).mean()
+        else:
+            raise ValueError
+ 
+        losses = {'loss_salient': loss_salient}
+
+        return losses
+
+    def loss_compact(self, outputs, targets, indices, num_boxes):
+        assert "compact_logits" in outputs
+        idx = self._get_src_permutation_idx(indices)
+        pred_obj = outputs["compact_logits"][idx]
+        return  {'loss_compact': torch.clamp(pred_obj, min=self.min_obj).sum()/ num_boxes}
 
     def _get_src_permutation_idx(self, indices):
         # permute predictions following indices
@@ -567,7 +680,6 @@ class SetCriterion(nn.Module):
              targets: list of dicts, such that len(targets) == batch_size.
                       The expected keys in each dict depends on the losses applied, see each loss' doc
         """
-
         outputs_without_aux = {k: v for k, v in outputs.items() if k != 'aux_outputs'}
 
         # Retrieve the matching between the outputs of the last layer and the targets
@@ -622,7 +734,15 @@ class SetCriterion(nn.Module):
         if self.distillation_loss:
             distillation_loss = self.loss_distillation(outputs, targets, indices, num_boxes)
             losses.update(distillation_loss)
+        
+        if self.salient_loss:
+            salient_loss = self.loss_salient(outputs, targets, indices, num_boxes)
+            losses.update(salient_loss)
 
+        if self.compact_loss:
+            compact_loss = self.loss_compact(outputs, targets, indices, num_boxes)
+            losses.update(compact_loss)
+            
         return losses
 
 class PostProcess(nn.Module):
