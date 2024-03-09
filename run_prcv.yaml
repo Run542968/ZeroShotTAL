@@ -8,15 +8,15 @@ Zero-Shot:
               prompt:     
                 ConditionalDETR: 
                   # base   
-                  CUDA_VISIBLE_DEVICES=0 python main.py --model_name "ActivityNet13_CLIP_prompt_zs_base" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2    
+                  CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_ActivityNet13_base" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2    
                   # base + actionness :: 
-                  CUDA_VISIBLE_DEVICES=1 python main.py --model_name "ActivityNet13_CLIP_prompt_zs_actionness" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss
+                  CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_ActivityNet13_base_actionness" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss
                   # base + actionness + distillation
-                  CUDA_VISIBLE_DEVICES=2 python main.py --model_name "ActivityNet13_CLIP_prompt_zs_actionness_distillation" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
+                  CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_ActivityNet13_base_actionness_distillation" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
                   # base + actionness + distillation : 去掉backbone
                   CUDA_VISIBLE_DEVICES=2 python main.py --model_name "ActivityNet13_CLIP_prompt_zs_actionness_distillation_1" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
                   # base + actionness + distillation + salient
-                  CUDA_VISIBLE_DEVICES=3 python main.py --model_name "ActivityNet13_CLIP_prompt_zs_actionness_distillation_salient" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss
+                  CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_ActivityNet13_base_actionness_distillation_salient" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss
 
                 DeformableDETR:
                   # base
@@ -61,4 +61,3 @@ Zero-Shot:
               prompt:                   
             thumos14: 
               prompt:
-
