@@ -35,6 +35,8 @@ import torchvision.ops.roi_align as ROIalign
 import json
 import numpy as np
 import os
+import logging
+logger = logging.getLogger()
 
 def _get_clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
@@ -109,6 +111,11 @@ class DeformableDETR(nn.Module):
         self.ensemble_rate = args.ensemble_rate
         self.ensemble_strategy = args.ensemble_strategy
 
+        self.enable_element = args.enable_element
+        self.num_element = args.num_element
+        self.element_rate = args.element_rate
+
+
         hidden_dim = transformer.d_model
 
 
@@ -174,6 +181,17 @@ class DeformableDETR(nn.Module):
                 [self.bbox_embed for _ in range(num_pred)])
             self.transformer.decoder.bbox_embed = None
 
+
+        # learnable element query
+        if self.enable_element:
+            self.dynamic_element = nn.Embedding(self.num_element, hidden_dim)
+            self.dynamic_attn = nn.MultiheadAttention(hidden_dim, num_heads=4, dropout=0.2)
+
+
+        if self.target_type != "none":
+            logger.info(f"The target_type is {self.target_type}, using text embedding as target, on task: {args.task}!")
+        else:
+            logger.info(f"The target_type is {self.target_type}, using one-hot coding as target, must in close_set!")
 
     def get_text_feats(self, cl_names, description_dict, device, target_type):
         def get_prompt(cl_names):
@@ -405,6 +423,13 @@ class DeformableDETR(nn.Module):
         if self.target_type != "none":
             outputs_embed = torch.stack([self.class_embed[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,dim]
             out['class_embs'] = outputs_embed[-1]
+            l,b,n,dim = outputs_embed.shape
+            if self.enable_element: # fuse the dynamic element into query embedding
+                dynamics = self.dynamic_element.weight # [k, dim]
+                dynamics = dynamics.unsqueeze(0).repeat(l*b,1,1).permute(1,0,2) # [l*b,k,dim]->[k,l*b,dim]
+                query_embed = outputs_embed.reshape(l*b,n,dim).permute(1,0,2) # [l*b,n,dim]->[n,l*b,dim]
+                tgt = self.dynamic_attn(query=query_embed, key=dynamics, value=dynamics)[0] # [n,l*b,dim]
+                outputs_embed = (query_embed + self.element_rate*tgt).permute(1,0,2).reshape(l,b,n,dim) # [n,l*b,dim]->[l*b,n,dim]->[l,b,n,dim]
             outputs_logit = self._compute_similarity(outputs_embed, text_feats) # [dec_layers, b,num_queries,num_classes]
         else:
             outputs_logit = torch.stack([self.class_embed[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,dim]

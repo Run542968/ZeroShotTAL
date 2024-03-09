@@ -115,10 +115,16 @@ class ConditionalDETR(nn.Module):
 
         self.distillation_loss = args.distillation_loss
         self.salient_loss = args.salient_loss
-        
+
         self.enable_ensemble = args.enable_ensemble
         self.ensemble_rate = args.ensemble_rate
         self.ensemble_strategy = args.ensemble_strategy
+
+        self.enable_element = args.enable_element
+        self.num_element = args.num_element
+        self.element_rate = args.element_rate
+
+        self.compact_loss = args.compact_loss
 
         hidden_dim = transformer.d_model
 
@@ -197,6 +203,13 @@ class ConditionalDETR(nn.Module):
             self.bbox_embed = nn.ModuleList([self.bbox_embed for _ in range(num_pred)])
             if self.actionness_loss:
                 self.actionness_embed = nn.ModuleList([self.actionness_embed for _ in range(num_pred)])
+
+
+        # learnable element query
+        if self.enable_element:
+            self.dynamic_element = nn.Embedding(self.num_element, hidden_dim)
+            self.dynamic_attn = nn.MultiheadAttention(hidden_dim, num_heads=4, dropout=0.2)
+
 
         if self.target_type != "none":
             logger.info(f"The target_type is {self.target_type}, using text embedding as target, on task: {args.task}!")
@@ -420,12 +433,19 @@ class ConditionalDETR(nn.Module):
 
         if self.target_type != "none":
             outputs_embed = torch.stack([self.class_embed[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,dim]
+            out['class_embs'] = outputs_embed[-1]
+            l,b,n,dim = outputs_embed.shape
+            if self.enable_element: # fuse the dynamic element into query embedding
+                dynamics = self.dynamic_element.weight # [k, dim]
+                dynamics = dynamics.unsqueeze(0).repeat(l*b,1,1).permute(1,0,2) # [l*b,k,dim]->[k,l*b,dim]
+                query_embed = outputs_embed.reshape(l*b,n,dim).permute(1,0,2) # [l*b,n,dim]->[n,l*b,dim]
+                tgt = self.dynamic_attn(query=query_embed, key=dynamics, value=dynamics)[0] # [n,l*b,dim]
+                outputs_embed = (query_embed + self.element_rate*tgt).permute(1,0,2).reshape(l,b,n,dim) # [n,l*b,dim]->[l*b,n,dim]->[l,b,n,dim]
+
             outputs_logit = self._compute_similarity(outputs_embed, text_feats) # [dec_layers, b,num_queries,num_classes]
         else:
             outputs_logit = torch.stack([self.class_embed[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,dim]
-            outputs_embed = [None]
         out['class_logits'] = outputs_logit[-1]
-        out['class_embs'] = outputs_embed[-1]
 
 
         if self.actionness_loss :

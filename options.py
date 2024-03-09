@@ -66,6 +66,10 @@ parser.add_argument('--dec_n_points', type=int, default=4, help="Number of sampl
 ## posPrior
 parser.add_argument('--enable_posPrior', action='store_true', default=False)
 
+## learnable dynamic element
+parser.add_argument('--enable_element', action='store_true', default=False)
+parser.add_argument('--num_element', type=int, default=5, help="the number of element for learning dynmic elements")
+parser.add_argument('--element_rate', type=float, default=1, help="the ratio to fuse dynamic feature to origin outputs feature")
 
 
 # Loss
@@ -86,8 +90,8 @@ parser.add_argument('--salient_loss', action='store_true', default=False)
 parser.add_argument('--salient_loss_coef', type=float, default=1)
 parser.add_argument('--salient_loss_impl', type=str, default="BCE", choices=('BCE','CE'))
 
-
-
+parser.add_argument('--compact_loss', action='store_true', default=False)
+parser.add_argument('--compact_loss_coef', type=float, default=1)
 
 # Matcher
 parser.add_argument('--set_cost_class', type=float, default=2, help="Class coefficient in the matching cost")
