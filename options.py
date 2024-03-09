@@ -112,8 +112,11 @@ parser.add_argument('--test_interval', type=int, default=1, help="The interval t
 parser.add_argument('--proposals_weight_type', default="after_softmax", choices=("before_softmax","after_softmax"), help="the way to perform multiple between detector scores and ROIalign proposals")
 parser.add_argument('--prob_type', type=str, default="softmax", choices=("softmax","sigmoid", "none_mul"), help="the strategy to get normalized probability")
 parser.add_argument('--inference_entire', action='store_true', default=False, help="Whether to test entire video instead of slide window")
-parser.add_argument('--pooling_type', type=str, default="average", choices=("average","max", "center1", "center2","self_attention","slow_fast","sparse"), help="the strategy to get normalized probability")
 parser.add_argument('--filter_threshold', type=float, default=0, help="the threshold to filter negative proposals")
+parser.add_argument('--enable_ensemble', action='store_true', default=False, help="Whether to ensemble the result")
+parser.add_argument('--ensemble_rate', type=float, default=0.5, help="the balance coefficient between semantic head and CLIP capability")
+parser.add_argument('--ensemble_strategy', type=str, default="arithmetic", choices=("arithmetic","geomethric"), help="the strategy to ensemble")
+parser.add_argument('--pooling_type', type=str, default="average", choices=("average","max", "center1", "center2","self_attention","slow_fast","sparse"), help="the strategy to get normalized probability")
 
 
 

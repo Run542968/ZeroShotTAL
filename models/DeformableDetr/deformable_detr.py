@@ -105,6 +105,10 @@ class DeformableDETR(nn.Module):
         self.distillation_loss = args.distillation_loss
         self.salient_loss = args.salient_loss
 
+        self.enable_ensemble = args.enable_ensemble
+        self.ensemble_rate = args.ensemble_rate
+        self.ensemble_strategy = args.ensemble_strategy
+
         hidden_dim = transformer.d_model
 
 
@@ -444,7 +448,20 @@ class DeformableDETR(nn.Module):
             
                 salient_logits = self.salient_head(memory).permute(0,2,1) # [b,t,1]
                 out['salient_logits'] = salient_logits
-
+        else:
+            if self.enable_ensemble:
+                ROIalign_logits = self._temporal_pooling(self.pooling_type, out['pred_boxes'], clip_feat, mask, self.ROIalign_size, text_feats) # [b,num_queries,num_classes]
+                
+                if self.ensemble_strategy == "arithmetic":
+                    losgits = self.ensemble_rate*out['class_logits'] + (1-self.ensemble_rate)*ROIalign_logits
+                elif self.ensemble_strategy == "geomethric":
+                    losgits = torch.mul(out['class_logits'].pow(self.ensemble_rate),ROIalign_logits.pow(1-self.ensemble_rate))
+                else:
+                    NotImplementedError
+                
+                out['class_logits'] = losgits
+            else:
+                pass
 
 
         if self.aux_loss:

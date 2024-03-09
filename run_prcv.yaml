@@ -62,6 +62,6 @@ conda activate tadtr
 cd ZeroShotTAL
 
 
-CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_Thumos14_debug" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss
+CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_Thumos14_debug" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --enable_ensemble
 
 CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_deform_Thumos14_debug" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss
