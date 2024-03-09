@@ -19,10 +19,10 @@ import logging
 from utils.misc import (NestedTensor, nested_tensor_from_tensor_list, inverse_sigmoid)
 
 from .backbone import build_backbone
-from .matcher import build_matcher
 from .transformer import build_transformer
-from .criterion import build_criterion
-from .postprocess import build_postprocess
+from ..criterion import build_criterion
+from ..postprocess import build_postprocess
+from ..matcher import build_matcher
 from models.clip import build_text_encoder
 from models.clip import clip as clip_pkg
 import torchvision.ops.roi_align as ROIalign
@@ -115,7 +115,6 @@ class ConditionalDETR(nn.Module):
 
         self.distillation_loss = args.distillation_loss
         self.salient_loss = args.salient_loss
-        self.compact_loss = args.compact_loss
 
 
         hidden_dim = transformer.d_model
@@ -177,8 +176,6 @@ class ConditionalDETR(nn.Module):
                 nn.Conv1d(hidden_dim, 1, kernel_size=1)
             )
 
-        if self.compact_loss:
-            self.compact_head = ProbObjectnessHead(hidden_dim)
 
 
         # following TadTR
@@ -190,16 +187,13 @@ class ConditionalDETR(nn.Module):
                 self.bbox_embed[0].layers[-1].bias.data[1:], -2.0)
             if self.actionness_loss:
                 self.actionness_embed = _get_clones(self.actionness_embed, num_pred)
-            if self.compact_loss:
-                self.compact_head =  _get_clones(self.compact_head, num_pred)
+
         else: # shared parameters for each laryer
             self.class_embed = nn.ModuleList([self.class_embed for _ in range(num_pred)])
             nn.init.constant_(self.bbox_embed.layers[-1].bias.data[1:], -2.0)
             self.bbox_embed = nn.ModuleList([self.bbox_embed for _ in range(num_pred)])
             if self.actionness_loss:
                 self.actionness_embed = nn.ModuleList([self.actionness_embed for _ in range(num_pred)])
-            if self.compact_loss:
-                self.compact_head = nn.ModuleList([self.compact_head for _ in range(num_pred)])
 
         if self.target_type != "none":
             logger.info(f"The target_type is {self.target_type}, using text embedding as target, on task: {args.task}!")
@@ -436,10 +430,6 @@ class ConditionalDETR(nn.Module):
             actionness_logits = torch.stack([self.actionness_embed[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,1]
             out['actionness_logits'] = actionness_logits[-1]
 
-        if self.compact_loss:
-            compact_logits = torch.stack([self.compact_head[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries]
-            out['compact_logits'] = compact_logits[-1] # [b, num_queries]
-
 
         if self.training:
             if self.distillation_loss:
@@ -527,8 +517,6 @@ def build(args, device):
         weight_dict['loss_actionness'] = args.actionness_loss_coef
     if args.distillation_loss:
         weight_dict['loss_distillation'] = args.distillation_loss_coef
-    if args.compact_loss:
-        weight_dict['loss_compact'] = args.compact_loss_coef
 
     # TODO this is a hack
     if args.aux_loss:

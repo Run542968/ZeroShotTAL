@@ -24,11 +24,12 @@ from utils.misc import (accuracy)
 from utils.segment_ops import segment_cw_to_t1t2,segment_iou
 from utils.misc import (NestedTensor, nested_tensor_from_tensor_list, inverse_sigmoid, get_world_size, is_dist_avail_and_initialized)
 
-from .matcher import build_matcher
 from .position_encoding import build_position_encoding
-from .custom_loss import sigmoid_focal_loss,softmax_ce_loss
 from .transformer import build_deformable_transformer
 from models.clip import build_text_encoder
+from ..criterion import build_criterion
+from ..postprocess import build_postprocess
+from ..matcher import build_matcher
 from models.clip import clip as clip_pkg
 import torchvision.ops.roi_align as ROIalign
 import json
@@ -103,7 +104,6 @@ class DeformableDETR(nn.Module):
 
         self.distillation_loss = args.distillation_loss
         self.salient_loss = args.salient_loss
-        self.compact_loss = args.compact_loss
 
         hidden_dim = transformer.d_model
 
@@ -147,17 +147,12 @@ class DeformableDETR(nn.Module):
                 nn.Conv1d(hidden_dim, 1, kernel_size=1)
             )
 
-        if self.compact_loss:
-            self.compact_head = ProbObjectnessHead(hidden_dim)
-
 
         num_pred = transformer.decoder.num_layers
         if self.with_iterative_refine: # specific parameters for each laryer
             self.class_embed = _get_clones(self.class_embed, num_pred)
             if self.actionness_loss:
                 self.actionness_embed = _get_clones(self.actionness_embed, num_pred)
-            if self.compact_loss:
-                self.compact_head =  _get_clones(self.compact_head, num_pred)
             self.bbox_embed = _get_clones(self.bbox_embed, num_pred)
             nn.init.constant_(
                 self.bbox_embed[0].layers[-1].bias.data[1:], -2.0)
@@ -171,8 +166,6 @@ class DeformableDETR(nn.Module):
             if self.actionness_loss:
                 self.actionness_embed = nn.ModuleList(
                     [self.actionness_embed for _ in range(num_pred)])
-            if self.compact_loss:
-                self.compact_head = nn.ModuleList([self.compact_head for _ in range(num_pred)])
             self.bbox_embed = nn.ModuleList(
                 [self.bbox_embed for _ in range(num_pred)])
             self.transformer.decoder.bbox_embed = None
@@ -420,9 +413,6 @@ class DeformableDETR(nn.Module):
             actionness_logits = torch.stack([self.actionness_embed[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,dim]
             out['actionness_logits'] = actionness_logits[-1]
     
-        if self.compact_loss:
-            compact_logits = torch.stack([self.compact_head[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries]
-            out['compact_logits'] = compact_logits[-1] # [b, num_queries]
 
         if self.training:
             if self.distillation_loss:
@@ -473,371 +463,6 @@ class DeformableDETR(nn.Module):
                 for a, b in zip(outputs_class[:-1], outputs_coord[:-1])]
 
 
-class SetCriterion(nn.Module):
-    """ This class computes the loss for Conditional DETR.
-    The process happens in two steps:
-        1) we compute hungarian assignment between ground truth boxes and the outputs of the model
-        2) we supervise each pair of matched ground-truth / prediction (supervise class and box)
-    """
-    def __init__(self, num_classes, matcher, weight_dict,focal_alpha, args, base_losses=['labels', 'boxes']):
-        """ Create the criterion.
-        Parameters:
-            num_classes: number of object categories, omitting the special no-object category
-            matcher: module able to compute a matching between targets and proposals
-            weight_dict: dict containing as key the names of the losses and as values their relative weight.
-            base_losses: list of all the losses to be applied. See get_loss for list of available losses.
-            focal_alpha: alpha in Focal Loss
-            gamma: gamma in Focal Loss
-        """
-        super().__init__()
-        self.num_classes = num_classes
-        self.matcher = matcher
-        self.weight_dict = weight_dict
-        self.focal_alpha = focal_alpha
-        self.gamma = args.gamma
-        self.target_type = args.target_type
-
-        self.actionness_loss = args.actionness_loss 
-
-        self.distillation_loss = args.distillation_loss
-        self.salient_loss = args.salient_loss
-        self.salient_loss_impl = args.salient_loss_impl
-        self.compact_loss = args.compact_loss
-        self.min_obj=-args.hidden_dim*math.log(0.9)
-
-        if self.actionness_loss:
-            self.base_losses = ['labels','actionness','boxes']
-        else:
-            self.base_losses = ['labels', 'boxes']
-
-    def loss_labels(self, outputs, targets, indices, num_boxes, log=True):
-        """Classification loss (Binary focal loss)
-        targets dicts must contain the key "labels" containing a tensor of dim [nb_target_boxes]
-        """
-        assert 'class_logits' in outputs
-        src_logits = outputs['class_logits'] # [bs,num_queries,num_classes]
-
-        idx = self._get_src_permutation_idx(indices) # (batch_idx,src_idx)
-        target_classes_o = torch.cat([t["semantic_labels"][J] for t, (_, J) in zip(targets, indices)]) # [batch_target_class_id]
-        target_classes = torch.full(src_logits.shape[:2], src_logits.shape[2],
-                                    dtype=torch.int64, device=src_logits.device) # [bs,num_queries]
-        target_classes[idx] = target_classes_o # [bs,num_queries]
-
-        target_classes_onehot = torch.zeros([src_logits.shape[0], src_logits.shape[1], src_logits.shape[2]+1],
-                                            dtype=src_logits.dtype, layout=src_logits.layout, device=src_logits.device) # [bs,num_queries,num_classes+1]
-        target_classes_onehot.scatter_(2, target_classes.unsqueeze(-1), 1)
-
-        target_classes_onehot = target_classes_onehot[:,:,:-1] # [bs,num_queries,num_classes]
-        loss_ce = sigmoid_focal_loss(src_logits, target_classes_onehot, num_boxes, alpha=self.focal_alpha, gamma=self.gamma) * src_logits.shape[1]
-        losses = {'loss_ce': loss_ce}
-
-        if log:
-            # TODO this should probably be a separate loss, not hacked in this one here
-            losses['class_error'] = 100 - accuracy(src_logits[idx], target_classes_o)[0] # [batch_matched_queries,num_classes]
-        return losses
-
-    def loss_boxes(self, outputs, targets, indices, num_boxes):
-        """Compute the losses related to the bounding boxes, the L1 regression loss and the GIoU loss
-           targets dicts must contain the key "segments" containing a tensor of dim [nb_target_boxes, 4]
-           The target boxes are expected in format (center_x, center_y, w, h), normalized by the image size.
-        """
-        assert 'pred_boxes' in outputs
-        idx = self._get_src_permutation_idx(indices) # (batch_idx,src_idx)
-        src_boxes = outputs['pred_boxes'][idx] # [batch_matched_queries,2]
-        target_boxes = torch.cat([t['segments'][i] for t, (_, i) in zip(targets, indices)], dim=0) # [batch_target,2]
-
-        loss_bbox = F.l1_loss(src_boxes, target_boxes, reduction='none')
-
-        losses = {}
-        losses['loss_bbox'] = loss_bbox.sum() / num_boxes
-
-        loss_giou = 1 - torch.diag(segment_iou(
-            segment_cw_to_t1t2(src_boxes).clamp(min=0,max=1), 
-            segment_cw_to_t1t2(target_boxes))) # the clamp is to deal with the case "center"-"width/2" < 0 and "center"+"width/2" < 1
-        losses['loss_giou'] = loss_giou.sum() / num_boxes
-        return losses
-
-    def loss_distillation(self,outputs, targets, indices, num_boxes):
-        '''
-        for distillation the CLIP feat to DETR detector
-        '''
-        assert 'student_emb' in outputs
-        assert 'teacher_emb' in outputs
-
-        # obtain logits
-        student_emb = outputs['student_emb']
-        teacher_emb = outputs['teacher_emb'] # [B,Q,dim]
-
-        loss = torch.abs(teacher_emb-student_emb).sum(-1)
-
-        losses = {}
-        losses['loss_distillation'] = loss.mean()
-        return losses
-
-    def loss_actionness(self, outputs, targets, indices, num_boxes, log=True):
-        """Classification loss (Binary focal loss)
-        targets dicts must contain the key "labels" containing a tensor of dim [nb_target_boxes]
-        """
-        assert 'actionness_logits' in outputs
-        src_logits = outputs['actionness_logits'] # [bs,num_queries,1]
-
-        idx = self._get_src_permutation_idx(indices) # (batch_idx,src_idx)
-        target_classes_o = torch.cat([t["labels"][J] for t, (_, J) in zip(targets, indices)]) # [batch_target_class_id]
-        target_classes = torch.full(src_logits.shape[:2], src_logits.shape[2],
-                                    dtype=torch.int64, device=src_logits.device) # [bs,num_queries]
-        target_classes[idx] = target_classes_o # [bs,num_queries]
-
-        target_classes_onehot = torch.zeros([src_logits.shape[0], src_logits.shape[1], src_logits.shape[2]+1],
-                                            dtype=src_logits.dtype, layout=src_logits.layout, device=src_logits.device) # [bs,num_queries,num_classes+1]
-        target_classes_onehot.scatter_(2, target_classes.unsqueeze(-1), 1)
-
-        target_classes_onehot = target_classes_onehot[:,:,:-1] # [bs,num_queries,num_classes]
-        loss_ce = sigmoid_focal_loss(src_logits, target_classes_onehot, num_boxes, alpha=self.focal_alpha, gamma=self.gamma) * src_logits.shape[1]
-        losses = {'loss_actionness': loss_ce}
-
-        if log:
-            # TODO this should probably be a separate loss, not hacked in this one here
-            losses['class_error'] = 100 - accuracy(src_logits[idx], target_classes_o)[0] # [batch_matched_queries,num_classes]
-        return losses
-
-    def loss_salient(self, outputs, targets, indices, num_boxes, log=True):
-        """
-            Rank loss, for fine-grained boundary perception
-            NOTE: If the num_queries is so small, can not cover all gt, an error will appear here
-        """
-
-        assert 'salient_logits' in outputs
-        assert 'salient_loss_mask' in outputs
-        assert 'salient_gt' in outputs
-        salient_logits = outputs['salient_logits'] # [bs,t,1]
-        salient_logits = salient_logits.squeeze(dim=2) # [bs,t]
-        mask = outputs['salient_loss_mask'] # [bs,t]
-        salient_gt = outputs['salient_gt'] # [bs,t]
-
-        if self.salient_loss_impl == "BCE":
-            prob = salient_logits.sigmoid() # [bs,t]
-            ce_loss = F.binary_cross_entropy_with_logits(salient_logits, salient_gt, reduction="none")
-            p_t = prob * salient_gt + (1 - prob) * (1 - salient_gt) # [bs,t]
-            loss = ce_loss * ((1 - p_t) ** self.gamma)
-
-            if self.focal_alpha >= 0:
-                alpha_t = self.focal_alpha * salient_gt + (1 - self.focal_alpha) * (1 - salient_gt)
-                loss = alpha_t * loss
-
-            un_mask = ~mask
-            loss_salient = loss*un_mask
-
-            loss_salient = loss_salient.mean(1).sum() / num_boxes 
-
-        elif self.salient_loss_impl == "CE":
-
-            salient_gt = salient_gt / (torch.sum(salient_gt, dim=1, keepdim=True) + 1e-4) # [b,t]
-
-            loss_salient = -(salient_gt * F.log_softmax(salient_logits, dim=-1)) # [b,t]
-            
-            un_mask = ~mask
-            loss_salient = loss_salient*un_mask
-            loss_salient = loss_salient.sum(dim=1).mean()
-        else:
-            raise ValueError
- 
-        losses = {'loss_salient': loss_salient}
-
-        return losses
-
-    def loss_compact(self, outputs, targets, indices, num_boxes):
-        assert "compact_logits" in outputs
-        idx = self._get_src_permutation_idx(indices)
-        pred_obj = outputs["compact_logits"][idx]
-        return  {'loss_compact': torch.clamp(pred_obj, min=self.min_obj).sum()/ num_boxes}
-
-    def _get_src_permutation_idx(self, indices):
-        # permute predictions following indices
-        batch_idx = torch.cat([torch.full_like(src, i) for i, (src, _) in enumerate(indices)])
-        src_idx = torch.cat([src for (src, _) in indices])
-        return batch_idx, src_idx
-
-    def _get_tgt_permutation_idx(self, indices):
-        # permute targets following indices
-        batch_idx = torch.cat([torch.full_like(tgt, i) for i, (_, tgt) in enumerate(indices)])
-        tgt_idx = torch.cat([tgt for (_, tgt) in indices])
-        return batch_idx, tgt_idx
-
-
-    def get_loss(self, loss, outputs, targets, indices, num_boxes, **kwargs):
-        loss_map = {
-            'labels': self.loss_labels,
-            'boxes': self.loss_boxes,
-            'actionness': self.loss_actionness
-        }
-        assert loss in loss_map, f'do you really want to compute {loss} loss?'
-        return loss_map[loss](outputs, targets, indices, num_boxes, **kwargs)
-
-    def forward(self, outputs, targets):
-        """ This performs the loss computation.
-        Parameters:
-             outputs: dict of tensors, see the output specification of the model for the format
-             targets: list of dicts, such that len(targets) == batch_size.
-                      The expected keys in each dict depends on the losses applied, see each loss' doc
-        """
-        outputs_without_aux = {k: v for k, v in outputs.items() if k != 'aux_outputs'}
-
-        # Retrieve the matching between the outputs of the last layer and the targets
-
-        if self.actionness_loss and self.target_type != "none": # if using the actionness loss, adopt actionness logits for set-matching
-            assert "actionness_logits" in outputs_without_aux
-            # We flatten to compute the cost matrices in a batch
-            logits = outputs_without_aux["actionness_logits"]
-
-            # Also concat the target labels and boxes
-            tgt_ids = torch.cat([v["labels"] for v in targets]) # [gt_instance_num]
-            tgt_bbox = torch.cat([v["segments"] for v in targets]) # [gt_instance_num, 2]
-            sizes = [len(v["segments"]) for v in targets]
-            
-        elif not self.actionness_loss or self.target_type == "none":
-            assert "class_logits" in outputs_without_aux
-            # We flatten to compute the cost matrices in a batch
-            logits = outputs_without_aux["class_logits"]
-
-            # Also concat the target labels and boxes
-            tgt_ids = torch.cat([v["semantic_labels"] for v in targets]) # [gt_instance_num]
-            tgt_bbox = torch.cat([v["segments"] for v in targets]) # [gt_instance_num, 2]
-            sizes = [len(v["segments"]) for v in targets]
-        else:
-            raise ValueError
-        
-        indices = self.matcher(logits, outputs_without_aux["pred_boxes"], tgt_ids, tgt_bbox, sizes)
-
-        # Compute the average number of target boxes accross all nodes, for normalization purposes
-        num_boxes = sum(len(t["labels"]) for t in targets)
-        num_boxes = torch.as_tensor([num_boxes], dtype=torch.float, device=next(iter(outputs.values())).device).item()
-
-        # Compute all the requested losses
-        losses = {}
-        for loss in self.base_losses:
-            losses.update(self.get_loss(loss, outputs, targets, indices, num_boxes))
-
-        # In case of auxiliary losses, we repeat this process with the output of each innermediate layer.
-        if 'aux_outputs' in outputs:
-            for i, aux_outputs in enumerate(outputs['aux_outputs']):
-                indices = self.matcher(aux_outputs, targets)
-                for loss in self.base_losses:
-                    kwargs = {}
-                    if loss == 'labels':
-                        # Logging is enabled only for the last layer
-                        kwargs = {'log': False}
-                    l_dict = self.get_loss(loss, aux_outputs, targets, indices, num_boxes, **kwargs)
-                    l_dict = {k + f'_{i}': v for k, v in l_dict.items()}
-                    losses.update(l_dict)
-
-
-        if self.distillation_loss:
-            distillation_loss = self.loss_distillation(outputs, targets, indices, num_boxes)
-            losses.update(distillation_loss)
-        
-        if self.salient_loss:
-            salient_loss = self.loss_salient(outputs, targets, indices, num_boxes)
-            losses.update(salient_loss)
-
-        if self.compact_loss:
-            compact_loss = self.loss_compact(outputs, targets, indices, num_boxes)
-            losses.update(compact_loss)
-            
-        return losses
-
-class PostProcess(nn.Module):
-    """ This module converts the model's output into the format expected by the coco api"""
-    def __init__(self,args):
-        super().__init__()
-        self.type = args.postprocess_type
-        self.topk = args.postprocess_topk
-
-        self.target_type = args.target_type
-        self.proposals_weight_type = args.proposals_weight_type
-        self.actionness_loss = args.actionness_loss
-        self.prob_type = args.prob_type
-
-    @torch.no_grad()
-    def forward(self, outputs, target_sizes):
-        """ Perform the computation
-        Parameters:
-            outputs: raw outputs of the model
-            target_sizes: tensor of dimension [batch_size x 1] containing the size of each video of the batch
-        """
-        out_bbox = outputs['pred_boxes'] # [bs,num_queries,2]
-        
-
-        assert 'class_logits' in outputs
-        class_logits = outputs['class_logits'] #  [bs,num_queries,num_classes] 
-        if self.actionness_loss: # [bs,num_queries,1]
-            assert 'actionness_logits' in outputs
-            actionness_logits = outputs['actionness_logits']
-            actionness_prob = actionness_logits.sigmoid()
-
-            if self.prob_type == "softmax":
-                if self.proposals_weight_type == "before_softmax":
-                    prob = torch.mul(actionness_prob,class_logits).softmax(-1) # [bs,num_queries,num_classes]
-                elif self.proposals_weight_type == "after_softmax":
-                    prob = torch.mul(actionness_prob,class_logits.softmax(-1)) # [bs,num_queries,num_classes]
-            elif self.prob_type == "sigmoid":
-                prob = torch.mul(actionness_prob,class_logits.sigmoid()) # [bs,num_queries,num_classes]
-            elif self.prob_type == "none_mul":
-                prob = class_logits.softmax(-1) # [bs,num_queries,num_classes]
-            else:
-                raise NotImplementedError
-        else:
-            if self.prob_type == "softmax":
-                prob = class_logits.softmax(-1)
-            elif self.prob_type == "sigmoid":
-                prob = class_logits.sigmoid()
-            else:
-                raise NotImplementedError
-
-
-        B,Q,num_classes = prob.shape
-        assert len(prob) == len(target_sizes)
-
-
-        if self.type == "class_agnostic":
-            assert self.topk >= 1, "so small value for class_agnostic type, please check"
-            # sort across different instances, pick top 100 at most
-            topk_values, topk_indexes = torch.topk(prob.reshape(B, -1), min(self.topk, Q*num_classes), dim=1) # [bs,num_queries*num_classes] - > [bs,100]
-            scores = topk_values
-            topk_boxes_idx = torch.div(topk_indexes, num_classes, rounding_mode='trunc') # get the row index of out_logits (b,q,c), i.e., the query idx. [bs,100//num_classes]
-            labels = topk_indexes % num_classes # get the col index of out_logits (b,q,c), i.e., the class idx. [bs,100//num_classes]
-            out_boxes = segment_cw_to_t1t2(out_bbox).clamp(min=0,max=1) #  [bs,num_queries,2], the clamp is to deal with the case "center"-"width/2" < 0 and "center"+"width/2" < 1
-            topk_boxes = torch.gather(out_boxes, 1, topk_boxes_idx.unsqueeze(-1).repeat(1,1,2)) # [bs,topk,2]
-        elif self.type == "class_specific":
-            assert self.topk <= 5, "so big value for class_specific type, please check"
-            # pick topk classes for each query
-            topk_values, topk_indexes = torch.topk(prob, min(self.topk,num_classes), dim=-1) # [bs,num_queries,topk]
-            scores, labels = topk_values.flatten(1), topk_indexes.flatten(1) # [bs, num_queries*topk]
-            # (bs, nq, 1, 2)
-            out_boxes = segment_cw_to_t1t2(out_bbox).clamp(min=0,max=1) #  [bs,num_queries,2], the clamp is to deal with the case "center"-"width/2" < 0 and "center"+"width/2" < 1
-            topk_boxes = out_boxes[:, [torch.div(i, self.topk, rounding_mode='trunc') for i in range(self.topk*out_boxes.shape[1])], :] # [bs,num_queries*topk,2]
-            topk_boxes_idx = torch.div(torch.arange(0, self.topk*out_boxes.shape[1], 1, dtype=labels.dtype, device=labels.device), self.topk, rounding_mode='trunc')[None, :].repeat(labels.shape[0], 1)
-        elif self.type == "class_one":
-            # choose one class that all queries are assigned this category label
-            assert self.topk == 1, "so big value for class_one type, please check"
-            mean_prob = torch.mean(prob,dim=1) # [bs,num_classes]
-            value, idx = torch.topk(mean_prob, self.topk, dim=-1) # [bs,topk=1]
-            labels = idx.repeat(1,Q) # [bs,num_queries]
-            scores = torch.gather(prob,dim=2,index=idx.unsqueeze(1).repeat(1,Q,1)).squeeze(2) # [bs,num_queries,1]->[bs,num_queries]
-            out_boxes = segment_cw_to_t1t2(out_bbox).clamp(min=0,max=1) #  [bs,num_queries,2], the clamp is to deal with the case "center"-"width/2" < 0 and "center"+"width/2" < 1
-            topk_boxes = out_boxes # [bs,num_queries,2]
-            topk_boxes_idx = torch.arange(0, out_boxes.shape[1], 1, dtype=labels.dtype, device=labels.device)[None, :].repeat(labels.shape[0], 1)
-
-        else:
-            raise ValueError("Don't define this post process type: {self.type}")
-        
-        # from normalized [0, 1] to absolute [0, length] (second) coordinates
-        vid_length = target_sizes
-        scale_fct = torch.stack([vid_length, vid_length], dim=1) # [bs,2]-> "start, end"
-        topk_boxes = topk_boxes * scale_fct[:, None, :] # [bs,topk,2] transform fraction to second
-
-        results = [{'scores': s, 'labels': l, 'segments': b, 'query_ids': q } for s, l, b, q in zip(scores, labels, topk_boxes, topk_boxes_idx)] # corresponding to Tad_eval.update()
-
-        return results
 
 class MLP(nn.Module):
     """ Very simple multi-layer perceptron (also called FFN)"""
@@ -901,14 +526,13 @@ def build(args, device):
             aux_weight_dict.update({k + f'_{i}': v for k, v in weight_dict.items()})
         weight_dict.update(aux_weight_dict)
     
-    criterion = SetCriterion(num_classes, 
-                             matcher=matcher, 
-                             weight_dict=weight_dict,
-                             focal_alpha=args.focal_alpha,
-                             args=args)
+    matcher = build_matcher(args)
+
+ 
+    criterion = build_criterion(args, num_classes, matcher=matcher, weight_dict=weight_dict)
     criterion.to(device)
 
-    postprocessor = PostProcess(args)
+    postprocessor = build_postprocess(args)
 
     return model, criterion, postprocessor
 

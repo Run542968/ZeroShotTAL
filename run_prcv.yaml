@@ -10,49 +10,45 @@ Zero-Shot:
                   # base   
                   CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_ActivityNet13_base" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2    
                   # base + actionness :: 
-                  CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_ActivityNet13_base_actionness" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss
+                  CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_ActivityNet13_base_act" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss
                   # base + actionness + distillation
-                  CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_ActivityNet13_base_actionness_distillation" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
+                  CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_ActivityNet13_base_act_dis" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
                   # base + actionness + distillation : 去掉backbone
-                  CUDA_VISIBLE_DEVICES=2 python main.py --model_name "ActivityNet13_CLIP_prompt_zs_actionness_distillation_1" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
+                  CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_ActivityNet13_base_act_dis_1" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
                   # base + actionness + distillation + salient
-                  CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_ActivityNet13_base_actionness_distillation_salient" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss
+                  CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_ActivityNet13_base_act_dis_sal" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss
 
                 DeformableDETR:
                   # base
-                  CUDA_VISIBLE_DEVICES=0 python main.py --model_name "ActivityNet13_CLIP_prompt_zs_deformable_base" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2    
+                  CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_deform_ActivityNet13_base" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2    
                   # base + actionness
-                  CUDA_VISIBLE_DEVICES=1 python main.py --model_name "ActivityNet13_CLIP_prompt_zs_deformable_actionness" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss
+                  CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_deform_ActivityNet13_base_act" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss
                   # base + actionness + distillation
-                  CUDA_VISIBLE_DEVICES=2 python main.py --model_name "ActivityNet13_CLIP_prompt_zs_deformable_actionness_distillation" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
+                  CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_deform_ActivityNet13_base_act_dis" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
                   # base + actionness + distillation : 去掉backbone
-                  CUDA_VISIBLE_DEVICES=1 python main.py --model_name "ActivityNet13_CLIP_prompt_zs_deformable_actionness_distillation_1" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
+                  CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_deform_ActivityNet13_base_act_dis_1" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
                   # base + actionness + distillation + salient
-                  CUDA_VISIBLE_DEVICES=2 python main.py --model_name "ActivityNet13_CLIP_prompt_zs_deformable_actionness_distillation_salient" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss
+                  CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_deform_ActivityNet13_base_act_dis_sal" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss
             thumos14:
               prompt:
                 ConditionalDETR:
                   # base
-                  CUDA_VISIBLE_DEVICES=0 python main.py --model_name "Thumos14_CLIP_prompt_zs_8frame_prcv_base" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5
+                  CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_Thumos14_base" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5
                   # base + actionness
-                  CUDA_VISIBLE_DEVICES=1 python main.py --model_name "Thumos14_CLIP_prompt_zs_8frame_prcv_actionness" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss
+                  CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_Thumos14_base_act" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss
                   # base + actionness + distillation
-                  CUDA_VISIBLE_DEVICES=2 python main.py --model_name "Thumos14_CLIP_prompt_zs_8frame_prcv_actionness_distillation" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
+                  CUDA_VISIBLE_DEVICES=5 python main.py --model_name "prcv_Thumos14_base_act_dis" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
                   # base + actionness + distillation + salient
-                  CUDA_VISIBLE_DEVICES=1 python main.py --model_name "Thumos14_CLIP_prompt_zs_8frame_prcv_actionness_distillation_salient" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss --salient_loss_coef 2
-                  # base + compact
-                  CUDA_VISIBLE_DEVICES=0 python main.py --model_name "Thumos14_CLIP_prompt_zs_8frame_prcv_base_compact" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --compact_loss
-                  # base + compact + distillation
-                  CUDA_VISIBLE_DEVICES=1 python main.py --model_name "Thumos14_CLIP_prompt_zs_8frame_prcv_base_compact_distillation" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --compact_loss --distillation_loss --distillation_loss_coef 0.1
+                  CUDA_VISIBLE_DEVICES=6 python main.py --model_name "prcv_Thumos14_base_act_dis_sal" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss --salient_loss_coef 2
                 DeformableDETR:
                   # base
-                  CUDA_VISIBLE_DEVICES=0 python main.py --model_name "Thumos14_CLIP_prompt_zs_8frame_prcv_deformable_base" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 
+                  CUDA_VISIBLE_DEVICES=7 python main.py --model_name "prcv_deform_Thumos14_base" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 
                   # base + actionness
-                  CUDA_VISIBLE_DEVICES=1 python main.py --model_name "Thumos14_CLIP_prompt_zs_8frame_prcv_deformable_actionnesss" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss
-                  # base + actionness + distillation (这里需要注意一下，真正跑实验的时候命名错了，给命名成Thumos14_CLIP_prompt_zs_8frame_prcv_deformable_distillation了)
-                  CUDA_VISIBLE_DEVICES=2 python main.py --model_name "Thumos14_CLIP_prompt_zs_8frame_prcv_deformable_actionness_distillation" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 
+                  CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_deform_Thumos14_base_act" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss
+                  # base + actionness + distillation 
+                  CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_deform_Thumos14_base_act_dis" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 
                   # base + actionness + distillation + salient
-                  CUDA_VISIBLE_DEVICES=0 python main.py --model_name "Thumos14_CLIP_prompt_zs_8frame_prcv_deformable_actionness_distillation_salient" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss --salient_loss_coef 2
+                  CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_deform_Thumos14_base_act_dis_sal" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss --salient_loss_coef 2
 
 
     split_50:
@@ -61,3 +57,11 @@ Zero-Shot:
               prompt:                   
             thumos14: 
               prompt:
+
+conda activate tadtr
+cd ZeroShotTAL
+
+
+CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_Thumos14_debug" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss
+
+CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_deform_Thumos14_debug" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss

@@ -1,27 +1,27 @@
-echo "8个实验后台执行开始, Compute Node: 211 ....."
-# 【base-15】--text_distillation_loss_coef 1
-CUDA_VISIBLE_DEVICES=1 python main.py --model_name "ActivityNet13_CLIP_prompt_zs_v6_42" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --use_mlflow --save_result --prefix "v6" --batch_size 16 --target_type "prompt" --lr 1e-4 --epochs 100 --num_queries 5 --postprocess_type "class_agnostic" --postprocess_topk 100 --rescale_length 300 --enc_layers 2 --dec_layers 2 --norm_embed --cls_loss_coef 3 --giou_loss_coef 3 --actionness_loss --text_distillation_loss &
-sleep 3
-# 【base-15】--text_distillation_loss_coef 0.5
-CUDA_VISIBLE_DEVICES=1 python main.py --model_name "ActivityNet13_CLIP_prompt_zs_v6_43" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --use_mlflow --save_result --prefix "v6" --batch_size 16 --target_type "prompt" --lr 1e-4 --epochs 100 --num_queries 5 --postprocess_type "class_agnostic" --postprocess_topk 100 --rescale_length 300 --enc_layers 2 --dec_layers 2 --norm_embed --cls_loss_coef 3 --giou_loss_coef 3 --actionness_loss --text_distillation_loss --text_distillation_loss_coef 0.5 &
-sleep 3
-# 【base-15】--text_distillation_loss_coef 3
-CUDA_VISIBLE_DEVICES=1 python main.py --model_name "ActivityNet13_CLIP_prompt_zs_v6_44" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --use_mlflow --save_result --prefix "v6" --batch_size 16 --target_type "prompt" --lr 1e-4 --epochs 100 --num_queries 5 --postprocess_type "class_agnostic" --postprocess_topk 100 --rescale_length 300 --enc_layers 2 --dec_layers 2 --norm_embed --cls_loss_coef 3 --giou_loss_coef 3 --actionness_loss --text_distillation_loss --text_distillation_loss_coef 3 &
-sleep 3
-# 【base-15】--text_distillation_loss_coef 5
-CUDA_VISIBLE_DEVICES=2 python main.py --model_name "ActivityNet13_CLIP_prompt_zs_v6_45" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --use_mlflow --save_result --prefix "v6" --batch_size 16 --target_type "prompt" --lr 1e-4 --epochs 100 --num_queries 5 --postprocess_type "class_agnostic" --postprocess_topk 100 --rescale_length 300 --enc_layers 2 --dec_layers 2 --norm_embed --cls_loss_coef 3 --giou_loss_coef 3 --actionness_loss --text_distillation_loss --text_distillation_loss_coef 5 &
-sleep 3
-# 【base-15】--exclusive_loss
-CUDA_VISIBLE_DEVICES=2 python main.py --model_name "ActivityNet13_CLIP_prompt_zs_v6_46" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --use_mlflow --save_result --prefix "v6" --batch_size 16 --target_type "prompt" --lr 1e-4 --epochs 100 --num_queries 5 --postprocess_type "class_agnostic" --postprocess_topk 100 --rescale_length 300 --enc_layers 2 --dec_layers 2 --norm_embed --cls_loss_coef 3 --giou_loss_coef 3 --actionness_loss --exclusive_loss &
-sleep 3
-# 【base-15】--exclusive_loss --exclusive_loss_coef 0.5
-CUDA_VISIBLE_DEVICES=2 python main.py --model_name "ActivityNet13_CLIP_prompt_zs_v6_47" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --use_mlflow --save_result --prefix "v6" --batch_size 16 --target_type "prompt" --lr 1e-4 --epochs 100 --num_queries 5 --postprocess_type "class_agnostic" --postprocess_topk 100 --rescale_length 300 --enc_layers 2 --dec_layers 2 --norm_embed --cls_loss_coef 3 --giou_loss_coef 3 --actionness_loss --exclusive_loss --exclusive_loss_coef 0.5 &
-sleep 3
-# 【base-15】--exclusive_loss --exclusive_loss_coef 3
-CUDA_VISIBLE_DEVICES=7 python main.py --model_name "ActivityNet13_CLIP_prompt_zs_v6_48" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --use_mlflow --save_result --prefix "v6" --batch_size 16 --target_type "prompt" --lr 1e-4 --epochs 100 --num_queries 5 --postprocess_type "class_agnostic" --postprocess_topk 100 --rescale_length 300 --enc_layers 2 --dec_layers 2 --norm_embed --cls_loss_coef 3 --giou_loss_coef 3 --actionness_loss --exclusive_loss --exclusive_loss_coef 3 &
-sleep 3
-# 【base-15】--exclusive_loss --exclusive_loss_coef 5
-CUDA_VISIBLE_DEVICES=7 python main.py --model_name "ActivityNet13_CLIP_prompt_zs_v6_49" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --use_mlflow --save_result --prefix "v6" --batch_size 16 --target_type "prompt" --lr 1e-4 --epochs 100 --num_queries 5 --postprocess_type "class_agnostic" --postprocess_topk 100 --rescale_length 300 --enc_layers 2 --dec_layers 2 --norm_embed --cls_loss_coef 3 --giou_loss_coef 3 --actionness_loss --exclusive_loss --exclusive_loss_coef 5 &
+echo "8个实验后台执行开始, Compute Node: 209 ....."
+# base
+CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_Thumos14_base" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 &
+sleep 5
+# base + actionness
+CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_Thumos14_base_act" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss &
+sleep 5
+# base + actionness + distillation
+CUDA_VISIBLE_DEVICES=5 python main.py --model_name "prcv_Thumos14_base_act_dis" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 &
+sleep 5
+# base + actionness + distillation + salient
+CUDA_VISIBLE_DEVICES=6 python main.py --model_name "prcv_Thumos14_base_act_dis_sal" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss --salient_loss_coef 2 &
+sleep 5
+# base
+CUDA_VISIBLE_DEVICES=7 python main.py --model_name "prcv_deform_Thumos14_base" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 &
+sleep 5
+# base + actionness
+CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_deform_Thumos14_base_act" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss &
+sleep 5
+# base + actionness + distillation 
+CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_deform_Thumos14_base_act_dis" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 &
+sleep 5
+# base + actionness + distillation + salient
+CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_deform_Thumos14_base_act_dis_sal" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss --salient_loss_coef 2 &
 wait
-echo "8个实验后台执行结束, Compute Node: 211 ....."
+echo "8个实验后台执行结束, Compute Node: 209 ....."
 

@@ -13,7 +13,6 @@ class PostProcess(nn.Module):
         self.target_type = args.target_type
         self.proposals_weight_type = args.proposals_weight_type
         self.actionness_loss = args.actionness_loss
-        self.compact_loss = args.compact_loss
         self.temperature = 1
         self.prob_type = args.prob_type
 
@@ -44,12 +43,6 @@ class PostProcess(nn.Module):
                 prob = class_logits.softmax(-1) # [bs,num_queries,num_classes]
             else:
                 raise NotImplementedError
-        elif self.compact_loss:
-            assert 'compact_logits' in outputs
-            compact_logits = outputs['compact_logits']
-            obj_prob = torch.exp(-self.temperature*compact_logits).unsqueeze(-1)
-            prob = obj_prob*class_logits.sigmoid()
-
         else:
             if self.prob_type == "softmax":
                 prob = class_logits.softmax(-1)

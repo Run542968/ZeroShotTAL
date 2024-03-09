@@ -86,8 +86,6 @@ parser.add_argument('--salient_loss', action='store_true', default=False)
 parser.add_argument('--salient_loss_coef', type=float, default=1)
 parser.add_argument('--salient_loss_impl', type=str, default="BCE", choices=('BCE','CE'))
 
-parser.add_argument('--compact_loss', action='store_true', default=False)
-parser.add_argument('--compact_loss_coef', type=float, default=1)
 
 
 
