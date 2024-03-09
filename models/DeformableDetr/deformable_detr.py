@@ -115,6 +115,7 @@ class DeformableDETR(nn.Module):
         self.num_element = args.num_element
         self.element_rate = args.element_rate
 
+        self.compact_loss = args.compact_loss
 
         hidden_dim = transformer.d_model
 
@@ -159,11 +160,31 @@ class DeformableDETR(nn.Module):
             )
 
 
+        # learnable element query
+        if self.enable_element:
+            self.dynamic_element = nn.Embedding(self.num_element, hidden_dim)
+            self.dynamic_attn = nn.MultiheadAttention(hidden_dim, num_heads=4, dropout=0.2)
+
+
+        # compacting feature after hs
+        if self.compact_loss:
+            self.compact_proj = nn.Linear(hidden_dim, hidden_dim)
+            # init prior_prob setting for focal loss
+            prior_prob = 0.01
+            bias_value = -math.log((1 - prior_prob) / prior_prob)
+            self.compact_proj.bias.data = torch.ones(hidden_dim) * bias_value
+
+            self.compact_head = ProbObjectnessHead(hidden_dim)
+
+
         num_pred = transformer.decoder.num_layers
         if self.with_iterative_refine: # specific parameters for each laryer
             self.class_embed = _get_clones(self.class_embed, num_pred)
             if self.actionness_loss:
                 self.actionness_embed = _get_clones(self.actionness_embed, num_pred)
+            if self.compact_loss:
+                self.compact_proj = _get_clones(self.compact_proj, num_pred)
+                self.compact_head =  _get_clones(self.compact_head, num_pred)
             self.bbox_embed = _get_clones(self.bbox_embed, num_pred)
             nn.init.constant_(
                 self.bbox_embed[0].layers[-1].bias.data[1:], -2.0)
@@ -177,15 +198,14 @@ class DeformableDETR(nn.Module):
             if self.actionness_loss:
                 self.actionness_embed = nn.ModuleList(
                     [self.actionness_embed for _ in range(num_pred)])
+            if self.compact_loss:
+                self.compact_proj = nn.ModuleList([self.compact_proj for _ in range(num_pred)])
+                self.compact_head = nn.ModuleList([self.compact_head for _ in range(num_pred)])
             self.bbox_embed = nn.ModuleList(
                 [self.bbox_embed for _ in range(num_pred)])
             self.transformer.decoder.bbox_embed = None
 
 
-        # learnable element query
-        if self.enable_element:
-            self.dynamic_element = nn.Embedding(self.num_element, hidden_dim)
-            self.dynamic_attn = nn.MultiheadAttention(hidden_dim, num_heads=4, dropout=0.2)
 
 
         if self.target_type != "none":
@@ -439,7 +459,14 @@ class DeformableDETR(nn.Module):
 
         if self.actionness_loss :
             # compute the class-agnostic foreground score
-            actionness_logits = torch.stack([self.actionness_embed[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,dim]
+            if self.compact_loss:
+                # feature constrain before input it to actionness_embed head
+                compact_feature = torch.stack([self.compact_proj[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,dim]
+                compact_value = torch.stack([self.compact_head[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries]
+                out['compact_value'] = compact_value[-1]
+                actionness_logits = torch.stack([self.actionness_embed[lvl](compact_feature[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,1]
+            else:
+                actionness_logits = torch.stack([self.actionness_embed[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,dim]
             out['actionness_logits'] = actionness_logits[-1]
     
 

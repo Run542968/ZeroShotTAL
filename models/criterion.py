@@ -62,6 +62,10 @@ class SetCriterion(nn.Module):
         self.salient_loss = args.salient_loss
         self.salient_loss_impl = args.salient_loss_impl
 
+        self.compact_loss = args.compact_loss
+        self.min_obj=-512*math.log(0.9)
+
+
         if self.actionness_loss:
             self.base_losses = ['labels','actionness','boxes']
         else:
@@ -202,6 +206,12 @@ class SetCriterion(nn.Module):
 
         return losses
 
+    def loss_compact(self, outputs, targets, indices, num_boxes):
+        assert "compact_value" in outputs
+        idx = self._get_src_permutation_idx(indices)
+        pred_obj = outputs["compact_value"][idx]
+        return  {'loss_compact': torch.clamp(pred_obj, min=self.min_obj).sum()/ num_boxes}
+
     def _get_src_permutation_idx(self, indices):
         # permute predictions following indices
         batch_idx = torch.cat([torch.full_like(src, i) for i, (src, _) in enumerate(indices)])
@@ -213,7 +223,6 @@ class SetCriterion(nn.Module):
         batch_idx = torch.cat([torch.full_like(tgt, i) for i, (_, tgt) in enumerate(indices)])
         tgt_idx = torch.cat([tgt for (_, tgt) in indices])
         return batch_idx, tgt_idx
-
 
     def get_loss(self, loss, outputs, targets, indices, num_boxes, **kwargs):
         loss_map = {
@@ -289,6 +298,10 @@ class SetCriterion(nn.Module):
         if self.salient_loss:
             salient_loss = self.loss_salient(outputs, targets, indices, num_boxes)
             losses.update(salient_loss)
+
+        if self.compact_loss:
+            compact_loss = self.loss_compact(outputs, targets, indices, num_boxes)
+            losses.update(compact_loss)
 
 
         return losses

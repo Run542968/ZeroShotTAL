@@ -185,6 +185,20 @@ class ConditionalDETR(nn.Module):
                 nn.Conv1d(hidden_dim, 1, kernel_size=1)
             )
 
+        # learnable element query
+        if self.enable_element:
+            self.dynamic_element = nn.Embedding(self.num_element, hidden_dim)
+            self.dynamic_attn = nn.MultiheadAttention(hidden_dim, num_heads=4, dropout=0.2)
+
+        # compacting feature after hs
+        if self.compact_loss:
+            self.compact_proj = nn.Linear(hidden_dim, hidden_dim)
+            # init prior_prob setting for focal loss
+            prior_prob = 0.01
+            bias_value = -math.log((1 - prior_prob) / prior_prob)
+            self.compact_proj.bias.data = torch.ones(hidden_dim) * bias_value
+            
+            self.compact_head = ProbObjectnessHead(hidden_dim)
 
 
         # following TadTR
@@ -196,6 +210,9 @@ class ConditionalDETR(nn.Module):
                 self.bbox_embed[0].layers[-1].bias.data[1:], -2.0)
             if self.actionness_loss:
                 self.actionness_embed = _get_clones(self.actionness_embed, num_pred)
+            if self.compact_loss:
+                self.compact_proj = _get_clones(self.compact_proj, num_pred)
+                self.compact_head =  _get_clones(self.compact_head, num_pred)
 
         else: # shared parameters for each laryer
             self.class_embed = nn.ModuleList([self.class_embed for _ in range(num_pred)])
@@ -203,12 +220,9 @@ class ConditionalDETR(nn.Module):
             self.bbox_embed = nn.ModuleList([self.bbox_embed for _ in range(num_pred)])
             if self.actionness_loss:
                 self.actionness_embed = nn.ModuleList([self.actionness_embed for _ in range(num_pred)])
-
-
-        # learnable element query
-        if self.enable_element:
-            self.dynamic_element = nn.Embedding(self.num_element, hidden_dim)
-            self.dynamic_attn = nn.MultiheadAttention(hidden_dim, num_heads=4, dropout=0.2)
+            if self.compact_loss:
+                self.compact_proj = nn.ModuleList([self.compact_proj for _ in range(num_pred)])
+                self.compact_head = nn.ModuleList([self.compact_head for _ in range(num_pred)])
 
 
         if self.target_type != "none":
@@ -450,7 +464,14 @@ class ConditionalDETR(nn.Module):
 
         if self.actionness_loss :
             # compute the class-agnostic foreground score
-            actionness_logits = torch.stack([self.actionness_embed[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,1]
+            if self.compact_loss:
+                # feature constrain before input it to actionness_embed head
+                compact_feature = torch.stack([self.compact_proj[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,dim]
+                compact_value = torch.stack([self.compact_head[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries]
+                out['compact_value'] = compact_value[-1]
+                actionness_logits = torch.stack([self.actionness_embed[lvl](compact_feature[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,1]
+            else:
+                actionness_logits = torch.stack([self.actionness_embed[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,1]
             out['actionness_logits'] = actionness_logits[-1]
 
 
@@ -554,6 +575,10 @@ def build(args, device):
         weight_dict['loss_actionness'] = args.actionness_loss_coef
     if args.distillation_loss:
         weight_dict['loss_distillation'] = args.distillation_loss_coef
+    if args.compact_loss:
+        weight_dict['loss_compact'] = args.compact_loss_coef
+
+
 
     # TODO this is a hack
     if args.aux_loss:

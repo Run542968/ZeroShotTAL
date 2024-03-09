@@ -10,3 +10,4 @@
   - 设计初衷：在base类上学习一些comment的dynamic元素，使得appearance相似的query具有可区分性
 - [ ] 添加--compact_loss
   - 给actionness head之前加一个feature projection，然后对project后的特征加一个batch内一致性的约束，目的是增强前景特征的表达能力，从而提高对于位置动作的定位能力
+  - 这个loss是搭配actionness loss一起用的
