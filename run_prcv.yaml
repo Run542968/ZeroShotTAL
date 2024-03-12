@@ -8,95 +8,320 @@ Zero-Shot:
               prompt:     
                 ConditionalDETR: 
                   base:   
+                    # basic :: 15.5297
                     CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_ActivityNet13_base" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2    
+                  
                   base + actionness:
+                    # basic :: 19.03322
                     CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_ActivityNet13_base_act" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss
+                    
+                    # --enable_ensemble --ensemble_rate 0
+                    CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_ActivityNet13_base_act_ensem_1" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --enable_ensemble --ensemble_rate 0
+                    # --enable_ensemble --ensemble_rate 0.25
+                    CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_ActivityNet13_base_act_ensem_2" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --enable_ensemble --ensemble_rate 0.25
+                    # --enable_ensemble --ensemble_rate 0.5
+                    CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_ActivityNet13_base_act_ensem_3" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --enable_ensemble --ensemble_rate 0.5
+                    # --enable_ensemble --ensemble_rate 0.75
+                    CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_ActivityNet13_base_act_ensem_4" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --enable_ensemble --ensemble_rate 0.75
+                    
+                  base + actionness + compact:
+                    # basic :: 17.79516
+                    CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_ActivityNet13_base_act_com" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --compact_loss
+                    # --compact_loss_coef 1e-3 :: 18.52132
+                    CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_ActivityNet13_base_act_com_1" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --compact_loss --compact_loss_coef 1e-3
+                    # --compact_loss_coef 1e-4 :: 19.85922
+                    CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_ActivityNet13_base_act_com_2" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --compact_loss --compact_loss_coef 1e-4
+                    # --compact_loss_coef 1e-5 :: 19.1838
+                    CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_ActivityNet13_base_act_com_3" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --compact_loss --compact_loss_coef 1e-5
+                    
                   base + actionness + distillation:
+                    # basic :: 25.74761
                     CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_ActivityNet13_base_act_dis" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
-                  base + actionness + distillation:
+                    # w/o backbone :: 23.88247
                     CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_ActivityNet13_base_act_dis_1" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
+                    
+                    # --distillation_loss_coef 0.01 :: 24.5691
+                    CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_ActivityNet13_base_act_dis_2" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.01
+                    # --distillation_loss_coef 0.05 :: 24.9022
+                    CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_ActivityNet13_base_act_dis_3" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.05
+                    # --distillation_loss_coef 0.3 :: 24.70688
+                    CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_ActivityNet13_base_act_dis_4" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.3
+                    # --distillation_loss_coef 0.5 :: 25.28199
+                    CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_ActivityNet13_base_act_dis_5" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.5
+                    
+                    # --enable_ensemble --ensemble_rate 0 :: 26.211
+                    CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_ActivityNet13_base_act_dis_ensem_1" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --enable_ensemble --ensemble_rate 0
+                    # --enable_ensemble --ensemble_rate 0.25 :: 26.2296
+                    CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_ActivityNet13_base_act_dis_ensem_2" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --enable_ensemble --ensemble_rate 0.25
+                    # --enable_ensemble --ensemble_rate 0.5 :: 26.09843
+                    CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_ActivityNet13_base_act_dis_ensem_3" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --enable_ensemble --ensemble_rate 0.5
+                    # --enable_ensemble --ensemble_rate 0.75 :: 25.81292
+                    CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_ActivityNet13_base_act_dis_ensem_4" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --enable_ensemble --ensemble_rate 0.75
+                    
+                  base + actionness + distillation + compact:
+                    # basic :: 24.9
+                    CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_ActivityNet13_base_act_dis_com" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --compact_loss
+                    # --compact_loss_coef 1e-3 :: 24.61316
+                    CUDA_VISIBLE_DEVICES=5 python main.py --model_name "prcv_ActivityNet13_base_act_dis_com_1" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --compact_loss --compact_loss_coef 1e-3
+                    # --compact_loss_coef 1e-4 :: 26.20038
+                    CUDA_VISIBLE_DEVICES=6 python main.py --model_name "prcv_ActivityNet13_base_act_dis_com_2" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --compact_loss --compact_loss_coef 1e-4
+                    # --compact_loss_coef 1e-5 :: 25.92637
+                    CUDA_VISIBLE_DEVICES=7 python main.py --model_name "prcv_ActivityNet13_base_act_dis_com_3" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --compact_loss --compact_loss_coef 1e-5
+                    
+                    # basic --batch_size 32 :: 24.64908
+                    CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_ActivityNet13_base_act_dis_com_4" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 32 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --compact_loss
+                    # --compact_loss_coef 1e-3 --batch_size 32 :: 25.62536
+                    CUDA_VISIBLE_DEVICES=5 python main.py --model_name "prcv_ActivityNet13_base_act_dis_com_5" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 32 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --compact_loss --compact_loss_coef 1e-3
+                    # --compact_loss_coef 1e-4 --batch_size 32 :: 24.74395
+                    CUDA_VISIBLE_DEVICES=6 python main.py --model_name "prcv_ActivityNet13_base_act_dis_com_6" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 32 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --compact_loss --compact_loss_coef 1e-4
+                    # --compact_loss_coef 1e-5 --batch_size 32 :: 24.69247
+                    CUDA_VISIBLE_DEVICES=7 python main.py --model_name "prcv_ActivityNet13_base_act_dis_com_7" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 32 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --compact_loss --compact_loss_coef 1e-5
+                    
                   base + actionness + distillation + salient:
+                    # basic :: 25.37953
                     CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_ActivityNet13_base_act_dis_sal" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss
 
+                    # --enable_ensemble --ensemble_rate 0 :: 26.44329
+                    CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_ActivityNet13_base_act_dis_sal_ensem_1" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss --enable_ensemble --ensemble_rate 0
+                    # --enable_ensemble --ensemble_rate 0.25 :: 26.41255
+                    CUDA_VISIBLE_DEVICES=5 python main.py --model_name "prcv_ActivityNet13_base_act_dis_sal_ensem_2" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss --enable_ensemble --ensemble_rate 0.25
+                    # --enable_ensemble --ensemble_rate 0.5 :: 26.22855
+                    CUDA_VISIBLE_DEVICES=6 python main.py --model_name "prcv_ActivityNet13_base_act_dis_sal_ensem_3" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss --enable_ensemble --ensemble_rate 0.5
+                    # --enable_ensemble --ensemble_rate 0.75 :: 25.83463
+                    CUDA_VISIBLE_DEVICES=7 python main.py --model_name "prcv_ActivityNet13_base_act_dis_sal_ensem_4" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss --enable_ensemble --ensemble_rate 0.75
+                    
+                    # --distillation_loss_coef 0.01 :: 23.28644
+                    CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_ActivityNet13_base_act_dis_sal_1" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.01 --salient_loss
+                    # --distillation_loss_coef 0.05 :: 24.75871
+                    CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_ActivityNet13_base_act_dis_sal_2" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.05 --salient_loss
+                    # --distillation_loss_coef 0.3 :: 26.04731
+                    CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_ActivityNet13_base_act_dis_sal_3" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.3 --salient_loss
+                    # --distillation_loss_coef 0.5 :: 23.94595
+                    CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_ActivityNet13_base_act_dis_sal_4" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.5 --salient_loss
+                    
                 DeformableDETR:
-                  # base
-                  CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_deform_ActivityNet13_base" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2    
-                  # base + actionness
-                  CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_deform_ActivityNet13_base_act" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss
-                  # base + actionness + distillation
-                  CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_deform_ActivityNet13_base_act_dis" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
-                  # base + actionness + distillation : 去掉backbone
-                  CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_deform_ActivityNet13_base_act_dis_1" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
-                  # base + actionness + distillation + salient
-                  CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_deform_ActivityNet13_base_act_dis_sal" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss
+                  base:
+                    # basic :: 13.43152
+                    CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_deform_ActivityNet13_base" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2    
+                  base + actionness:
+                    # basic :: 17.95813
+                    CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_deform_ActivityNet13_base_act" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss
+                  base + actionness + distillation:
+                    # basic :: 24.03485
+                    CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_deform_ActivityNet13_base_act_dis" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
+                  base + actionness + distillation:
+                    # w/o backbone :: 24.2928
+                    CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_deform_ActivityNet13_base_act_dis_1" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
+                  base + actionness + distillation + salient:
+                    # basic :: 25.07182
+                    CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_deform_ActivityNet13_base_act_dis_sal" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss
             thumos14:
               prompt:
                 ConditionalDETR:
                   base:
+                    # basic :: 13.58598
                     CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_Thumos14_base" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5
-                  base + actionness:
+                  base + actionness: 
+                    # basic :: 20.09219
                     CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_Thumos14_base_act" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss
-                  base + actionness + distillation:
-                    # basic
-                    CUDA_VISIBLE_DEVICES=5 python main.py --model_name "prcv_Thumos14_base_act_dis" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
-                    
+
                     # --enable_ensemble --ensemble_rate 0
-                    CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_Thumos14_base_act_dis_ensem_1" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --enable_ensemble --ensemble_rate 0.0
+                    CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_Thumos14_base_act_ensem_1" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --enable_ensemble --ensemble_rate 0
                     # --enable_ensemble --ensemble_rate 0.25
-                    CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_Thumos14_base_act_dis_ensem_2" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --enable_ensemble --ensemble_rate 0.25
+                    CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_Thumos14_base_act_ensem_2" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --enable_ensemble --ensemble_rate 0.25
                     # --enable_ensemble --ensemble_rate 0.5
-                    CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_Thumos14_base_act_dis_ensem_3" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --enable_ensemble --ensemble_rate 0.5
+                    CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_Thumos14_base_act_ensem_3" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --enable_ensemble --ensemble_rate 0.5
                     # --enable_ensemble --ensemble_rate 0.75
+                    CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_Thumos14_base_act_ensem_4" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --enable_ensemble --ensemble_rate 0.75
+                    
+                  base + actionness + compact:
+                    # basic :: 18.16837
+                    CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_Thumos14_base_act_com" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --compact_loss
+                    # --compact_loss_coef 1e-1 :: 5.906864
+                    CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_Thumos14_base_act_com_1" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --compact_loss --compact_loss_coef 1e-1
+                    # --compact_loss_coef 1e-2 :: 20.83742
+                    CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_Thumos14_base_act_com_2" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --compact_loss --compact_loss_coef 1e-2
+                    # --compact_loss_coef 1e-3 :: 20.35984
+                    CUDA_VISIBLE_DEVICES=5 python main.py --model_name "prcv_Thumos14_base_act_com_3" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --compact_loss --compact_loss_coef 1e-3
+                    # --compact_loss_coef 1e-4 :: 20.22459
+                    CUDA_VISIBLE_DEVICES=6 python main.py --model_name "prcv_Thumos14_base_act_com_4" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --compact_loss --compact_loss_coef 1e-4
+                    # --compact_loss_coef 1e-5 :: 21.23259
+                    CUDA_VISIBLE_DEVICES=7 python main.py --model_name "prcv_Thumos14_base_act_com_5" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --compact_loss --compact_loss_coef 1e-5
+
+                    # --compact_loss_coef 1e-2 --batch_size 32 :: 18.69352
+                    CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_Thumos14_base_act_com_6" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 32 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --compact_loss --compact_loss_coef 1e-2
+                    # --compact_loss_coef 1e-3 --batch_size 32 :: 18.94278
+                    CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_Thumos14_base_act_com_7" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 32 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --compact_loss --compact_loss_coef 1e-3
+                    # --compact_loss_coef 1e-4 --batch_size 32 :: 19.37454
+                    CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_Thumos14_base_act_com_8" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 32 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --compact_loss --compact_loss_coef 1e-4
+                    # --compact_loss_coef 1e-5 --batch_size 32 :: 18.56652
+                    CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_Thumos14_base_act_com_9" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 32 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --compact_loss --compact_loss_coef 1e-5
+
+                  base + actionness + distillation:
+                    # basic :: 26.51723
+                    CUDA_VISIBLE_DEVICES=5 python main.py --model_name "prcv_Thumos14_base_act_dis" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
+                    # --distillation_loss_coef 0.01 :: 26.31369
+                    CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_Thumos14_base_act_dis_1" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.01
+                    # --distillation_loss_coef 0.05 :: 28.41879
+                    CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_Thumos14_base_act_dis_2" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.05
+                    # --distillation_loss_coef 0.3 :: 25.45543
+                    CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_Thumos14_base_act_dis_3" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.3
+                    # --distillation_loss_coef 0.5 :: 22.09724
+                    CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_Thumos14_base_act_dis_4" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.5
+                    
+                    # --enable_ensemble --ensemble_rate 0 :: 26.99287
+                    CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_Thumos14_base_act_dis_ensem_1" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --enable_ensemble --ensemble_rate 0.0
+                    # --enable_ensemble --ensemble_rate 0.25 :: 27.63186
+                    CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_Thumos14_base_act_dis_ensem_2" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --enable_ensemble --ensemble_rate 0.25
+                    # --enable_ensemble --ensemble_rate 0.5 :: 27.70331
+                    CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_Thumos14_base_act_dis_ensem_3" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --enable_ensemble --ensemble_rate 0.5
+                    # --enable_ensemble --ensemble_rate 0.75 :: 27.2779
                     CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_Thumos14_base_act_dis_ensem_4" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --enable_ensemble --ensemble_rate 0.75
-                    # --enable_ensemble --ensemble_rate 0 --ensemble_strategy "geomethric"
+                    # --enable_ensemble --ensemble_rate 0 --ensemble_strategy "geomethric" :: 26.99287
                     CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_Thumos14_base_act_dis_ensem_5" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --enable_ensemble --ensemble_rate 0.0 --ensemble_strategy "geomethric"
-                    # --enable_ensemble --ensemble_rate 0.25 --ensemble_strategy "geomethric"
+                    # --enable_ensemble --ensemble_rate 0.25 --ensemble_strategy "geomethric" :: 2.398846
                     CUDA_VISIBLE_DEVICES=5 python main.py --model_name "prcv_Thumos14_base_act_dis_ensem_6" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --enable_ensemble --ensemble_rate 0.25 --ensemble_strategy "geomethric"
-                    # --enable_ensemble --ensemble_rate 0.5 --ensemble_strategy "geomethric"
+                    # --enable_ensemble --ensemble_rate 0.5 --ensemble_strategy "geomethric" :: 2.398846
                     CUDA_VISIBLE_DEVICES=6 python main.py --model_name "prcv_Thumos14_base_act_dis_ensem_7" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --enable_ensemble --ensemble_rate 0.5 --ensemble_strategy "geomethric"
-                    # --enable_ensemble --ensemble_rate 0.75 --ensemble_strategy "geomethric"
+                    # --enable_ensemble --ensemble_rate 0.75 --ensemble_strategy "geomethric" :: 2.398846
                     CUDA_VISIBLE_DEVICES=7 python main.py --model_name "prcv_Thumos14_base_act_dis_ensem_8" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --enable_ensemble --ensemble_rate 0.75 --ensemble_strategy "geomethric"
+                  
+                  base + actionness + distillation + compact: 
+                    # basic :: 28.88848
+                    CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_Thumos14_base_act_dis_com" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --compact_loss 
+                    # --distillation_loss_coef 0.05 :: 29.11947
+                    CUDA_VISIBLE_DEVICES=5 python main.py --model_name "prcv_Thumos14_base_act_dis_com_1" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.05 --compact_loss
+                    # --distillation_loss_coef 0.05 --compact_loss_coef 1e-4 :: 29.3488
+                    CUDA_VISIBLE_DEVICES=6 python main.py --model_name "prcv_Thumos14_base_act_dis_com_2" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.05 --compact_loss --compact_loss_coef 1e-4
+                    # --distillation_loss_coef 0.05 --compact_loss_coef 1e-5 :: 29.28356
+                    CUDA_VISIBLE_DEVICES=7 python main.py --model_name "prcv_Thumos14_base_act_dis_com_3" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.05 --compact_loss --compact_loss_coef 1e-5
+                    # --compact_loss_coef 1e-4 :: 30.71187
+                    CUDA_VISIBLE_DEVICES=5 python main.py --model_name "prcv_Thumos14_base_act_dis_com_4" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --compact_loss --compact_loss_coef 1e-4
+                    # --compact_loss_coef 1e-5 :: 
+                    CUDA_VISIBLE_DEVICES=6 python main.py --model_name "prcv_Thumos14_base_act_dis_com_5" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --compact_loss --compact_loss_coef 1e-5
+                    # --compact_loss_coef 1e-3 :: 
+                    CUDA_VISIBLE_DEVICES=7 python main.py --model_name "prcv_Thumos14_base_act_dis_com_6" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --compact_loss --compact_loss_coef 1e-3
+                    
                   base + actionness + distillation + salient:
+                    # basic :: 27.80162
                     CUDA_VISIBLE_DEVICES=6 python main.py --model_name "prcv_Thumos14_base_act_dis_sal" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss --salient_loss_coef 2
+
+                    # --distillation_loss_coef 0.01 :: 26.3798
+                    CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_Thumos14_base_act_dis_sal_1" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.01 --salient_loss --salient_loss_coef 2
+                    # --distillation_loss_coef 0.05 :: 27.51324
+                    CUDA_VISIBLE_DEVICES=5 python main.py --model_name "prcv_Thumos14_base_act_dis_sal_2" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.05 --salient_loss --salient_loss_coef 2
+                    # --distillation_loss_coef 0.3 :: 22.61387
+                    CUDA_VISIBLE_DEVICES=6 python main.py --model_name "prcv_Thumos14_base_act_dis_sal_3" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.3 --salient_loss --salient_loss_coef 2
+                    # --distillation_loss_coef 0.5 :: 21.86516
+                    CUDA_VISIBLE_DEVICES=7 python main.py --model_name "prcv_Thumos14_base_act_dis_sal_4" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.5 --salient_loss --salient_loss_coef 2
+                    
                   base + actionness + distillation + salient + dynamic_fusion:
-                    # --enable_element
+                    # --enable_element :: 20.17754
                     CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_Thumos14_base_act_dis_sal_dyn" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss --salient_loss_coef 2 --enable_element
-                    # --enable_element --element_rate 0.9
+                    # --enable_element --element_rate 0.9 :: 21.32118
                     CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_Thumos14_base_act_dis_sal_dyn_1" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss --salient_loss_coef 2 --enable_element --element_rate 0.9
-                    # --enable_element --element_rate 0.75
+                    # --enable_element --element_rate 0.75 :: 19.04383
                     CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_Thumos14_base_act_dis_sal_dyn_2" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss --salient_loss_coef 2 --enable_element --element_rate 0.75
-                    # --enable_element --element_rate 0.6
+                    # --enable_element --element_rate 0.6 :: 21.444
                     CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_Thumos14_base_act_dis_sal_dyn_3" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss --salient_loss_coef 2 --enable_element --element_rate 0.6
-                    # --enable_element --element_rate 0.5
+                    # --enable_element --element_rate 0.5 :: 19.76582
                     CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_Thumos14_base_act_dis_sal_dyn_4" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss --salient_loss_coef 2 --enable_element --element_rate 0.5
-                    # --enable_element --element_rate 0.3
+                    # --enable_element --element_rate 0.3 :: 21.66652
                     CUDA_VISIBLE_DEVICES=5 python main.py --model_name "prcv_Thumos14_base_act_dis_sal_dyn_5" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss --salient_loss_coef 2 --enable_element --element_rate 0.3
-                    # --enable_element --element_rate 0.1
+                    # --enable_element --element_rate 0.1 :: 23.14508
                     CUDA_VISIBLE_DEVICES=6 python main.py --model_name "prcv_Thumos14_base_act_dis_sal_dyn_6" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss --salient_loss_coef 2 --enable_element --element_rate 0.1
-                    # --enable_element --element_rate 0.05
+                    # --enable_element --element_rate 0.05 :: 26.22984
                     CUDA_VISIBLE_DEVICES=7 python main.py --model_name "prcv_Thumos14_base_act_dis_sal_dyn_7" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss --salient_loss_coef 2 --enable_element --element_rate 0.05
+
+
                 DeformableDETR:
-                  # base
+                  # base :: 11.62257
                   CUDA_VISIBLE_DEVICES=7 python main.py --model_name "prcv_deform_Thumos14_base" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 
-                  # base + actionness
+                  # base + actionness :: 19.55585
                   CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_deform_Thumos14_base_act" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss
-                  # base + actionness + distillation 
+                  # base + actionness + distillation :: 29.74727
                   CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_deform_Thumos14_base_act_dis" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 
-                  # base + actionness + distillation + salient
+                  # base + actionness + distillation + salient :: 29.97401
                   CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_deform_Thumos14_base_act_dis_sal" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --salient_loss --salient_loss_coef 2
 
 
     split_50:
         clip:
-            activitynet1.3: 
-              prompt:                   
             thumos14: 
+              prompt:      
+                base:
+                  # bacic
+                  CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_Thumos14_50_base" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2
+                base + actionness:
+                  # bacic
+                  CUDA_VISIBLE_DEVICES=5 python main.py --model_name "prcv_Thumos14_50_base_act" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss
+
+                  # --enable_ensemble --ensemble_rate 0
+                  CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_Thumos14_50_base_act_ensem_1" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --enable_ensemble --ensemble_rate 0
+                  # --enable_ensemble --ensemble_rate 0.25
+                  CUDA_VISIBLE_DEVICES=5 python main.py --model_name "prcv_Thumos14_50_base_act_ensem_2" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --enable_ensemble --ensemble_rate 0.25
+                  # --enable_ensemble --ensemble_rate 0.5
+                  CUDA_VISIBLE_DEVICES=6 python main.py --model_name "prcv_Thumos14_50_base_act_ensem_3" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --enable_ensemble --ensemble_rate 0.5
+                  # --enable_ensemble --ensemble_rate 0.75
+                  CUDA_VISIBLE_DEVICES=7 python main.py --model_name "prcv_Thumos14_50_base_act_ensem_4" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --enable_ensemble --ensemble_rate 0.75
+                  
+                base + actionness + distillation:
+                  # bacic
+                  CUDA_VISIBLE_DEVICES=6 python main.py --model_name "prcv_Thumos14_50_base_act_dis" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
+
+                  # --enable_ensemble --ensemble_rate 0
+                  CUDA_VISIBLE_DEVICES=7 python main.py --model_name "prcv_Thumos14_50_base_act_dis_ensem_1" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --enable_ensemble --ensemble_rate 0
+                  # --enable_ensemble --ensemble_rate 0.25
+                  CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_Thumos14_50_base_act_dis_ensem_2" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --enable_ensemble --ensemble_rate 0.25
+                  # --enable_ensemble --ensemble_rate 0.5
+                  CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_Thumos14_50_base_act_dis_ensem_3" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --enable_ensemble --ensemble_rate 0.5
+                  
+                base + actionness + distillation + compact:  
+                  # basic
+                  CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_Thumos14_50_base_act_dis_com" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --compact_loss
+                  # --compact_loss_coef 1e-4
+                  CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_Thumos14_50_base_act_dis_com_1" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --compact_loss --compact_loss_coef 1e-4
+            
+            activitynet1.3: 
               prompt:
+                base:
+                  # basic :: 9.544213
+                  CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_ActivityNet13_50_base" --cfg_path "./config/ActivityNet13_CLIP_zs_50.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 3 --enable_backbone --lr_backbone 1e-2
+                base + actionness:
+                  # basic :: 13.04438
+                  CUDA_VISIBLE_DEVICES=5 python main.py --model_name "prcv_ActivityNet13_50_base_act" --cfg_path "./config/ActivityNet13_CLIP_zs_50.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 3 --enable_backbone --lr_backbone 1e-2 --actionness_loss
+
+                  # --enable_ensemble --ensemble_rate 0 :: 25.39178
+                  CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_ActivityNet13_50_base_act_ensem_1" --cfg_path "./config/ActivityNet13_CLIP_zs_50.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 3 --enable_backbone --lr_backbone 1e-2 --actionness_loss --enable_ensemble --ensemble_rate 0
+                  # --enable_ensemble --ensemble_rate 0.25 :: 25.451
+                  CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_ActivityNet13_50_base_act_ensem_2" --cfg_path "./config/ActivityNet13_CLIP_zs_50.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 3 --enable_backbone --lr_backbone 1e-2 --actionness_loss --enable_ensemble --ensemble_rate 0.25
+                  # --enable_ensemble --ensemble_rate 0.5 :: 24.99017
+                  CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_ActivityNet13_50_base_act_ensem_3" --cfg_path "./config/ActivityNet13_CLIP_zs_50.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 3 --enable_backbone --lr_backbone 1e-2 --actionness_loss --enable_ensemble --ensemble_rate 0.5
+                  # --enable_ensemble --ensemble_rate 0.75 :: 22.82311
+                  CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_ActivityNet13_50_base_act_ensem_4" --cfg_path "./config/ActivityNet13_CLIP_zs_50.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 3 --enable_backbone --lr_backbone 1e-2 --actionness_loss --enable_ensemble --ensemble_rate 0.75
+                  
+                base + actionness + distillation:
+                  # basic :: 21.88814
+                  CUDA_VISIBLE_DEVICES=6 python main.py --model_name "prcv_ActivityNet13_50_base_act_dis" --cfg_path "./config/ActivityNet13_CLIP_zs_50.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 3 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1
+
+                  # --enable_ensemble --ensemble_rate 0 :: 24.54913
+                  CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_ActivityNet13_50_base_act_dis_ensem_1" --cfg_path "./config/ActivityNet13_CLIP_zs_50.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 3 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --enable_ensemble --ensemble_rate 0
+                  # --enable_ensemble --ensemble_rate 0.25 :: 24.40899
+                  CUDA_VISIBLE_DEVICES=5 python main.py --model_name "prcv_ActivityNet13_50_base_act_dis_ensem_2" --cfg_path "./config/ActivityNet13_CLIP_zs_50.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 3 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --enable_ensemble --ensemble_rate 0.25
+                  # --enable_ensemble --ensemble_rate 0.5 :: 24.08637
+                  CUDA_VISIBLE_DEVICES=6 python main.py --model_name "prcv_ActivityNet13_50_base_act_dis_ensem_3" --cfg_path "./config/ActivityNet13_CLIP_zs_50.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 3 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --enable_ensemble --ensemble_rate 0.5
+                  # --enable_ensemble --ensemble_rate 0.75 :: 23.30076
+                  CUDA_VISIBLE_DEVICES=7 python main.py --model_name "prcv_ActivityNet13_50_base_act_dis_ensem_4" --cfg_path "./config/ActivityNet13_CLIP_zs_50.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 3 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --enable_ensemble --ensemble_rate 0.75
+                  
+                base + actionness + distillation + compact: 
+                  # --compact_loss_coef 1e-4 :: 21.01938
+                  CUDA_VISIBLE_DEVICES=7 python main.py --model_name "prcv_ActivityNet13_50_base_act_dis_com" --cfg_path "./config/ActivityNet13_CLIP_zs_50.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 3 --enable_backbone --lr_backbone 1e-2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1 --compact_loss --compact_loss_coef 1e-4
+
 
 conda activate tadtr
 cd ZeroShotTAL
 
 
-CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_Thumos14_debug" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --compact_loss
+CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_Thumos14_debug" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --enable_sdfuison
 
 CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_deform_Thumos14_debug" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --detr_architecture "DeformableDetr" --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --compact_loss

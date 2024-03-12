@@ -23,6 +23,7 @@ from .transformer import build_transformer
 from ..criterion import build_criterion
 from ..postprocess import build_postprocess
 from ..matcher import build_matcher
+from ..refine_decoder import build_refine_decoder
 from models.clip import build_text_encoder
 from models.clip import clip as clip_pkg
 import torchvision.ops.roi_align as ROIalign
@@ -126,6 +127,9 @@ class ConditionalDETR(nn.Module):
 
         self.compact_loss = args.compact_loss
 
+        self.enable_sdfuison = args.enable_sdfuison
+        self.sdfuison_rate = args.sdfuison_rate
+
         hidden_dim = transformer.d_model
 
 
@@ -200,6 +204,8 @@ class ConditionalDETR(nn.Module):
             
             self.compact_head = ProbObjectnessHead(hidden_dim)
 
+        if self.enable_sdfuison:
+            self.fusion_attn = nn.MultiheadAttention(hidden_dim, num_heads=4, dropout=0.2)
 
         # following TadTR
         num_pred = transformer.decoder.num_layers
@@ -448,14 +454,28 @@ class ConditionalDETR(nn.Module):
         if self.target_type != "none":
             outputs_embed = torch.stack([self.class_embed[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,dim]
             out['class_embs'] = outputs_embed[-1]
-            l,b,n,dim = outputs_embed.shape
+
             if self.enable_element: # fuse the dynamic element into query embedding
+                l,b,n,dim = outputs_embed.shape
                 dynamics = self.dynamic_element.weight # [k, dim]
                 dynamics = dynamics.unsqueeze(0).repeat(l*b,1,1).permute(1,0,2) # [l*b,k,dim]->[k,l*b,dim]
                 query_embed = outputs_embed.reshape(l*b,n,dim).permute(1,0,2) # [l*b,n,dim]->[n,l*b,dim]
                 tgt = self.dynamic_attn(query=query_embed, key=dynamics, value=dynamics)[0] # [n,l*b,dim]
                 outputs_embed = (query_embed + self.element_rate*tgt).permute(1,0,2).reshape(l,b,n,dim) # [n,l*b,dim]->[l*b,n,dim]->[l,b,n,dim]
+            if self.enable_sdfuison: # fuse the clip feat into query embedding via cross-attention
+                roi_feat = self._roi_align(out['pred_boxes'],clip_feat,mask,self.ROIalign_size).squeeze() # [bs,num_queries,ROIalign_size,dim]
 
+                query_feat = outputs_embed[-1].permute(1,0,2) # [num_queries,b,dim]
+                segment_feat = roi_feat.permute(2,1,0,3) # [RoIsize,num_queries,b,dim]
+                RoIsize,n,b,dim = segment_feat.shape
+                segment_feat = segment_feat.reshape(RoIsize,n*b,dim) # [RoIsize,n*b,dim]
+                query_feat = query_feat.reshape(1,n*b,dim) # [1,n*b,dim]
+
+                tgt = self.fusion_attn(query=query_feat,
+                                            key=segment_feat,
+                                            value=segment_feat)[0] # [1,n*b,dim]
+                tgt = tgt.reshape(n,b,dim).permute(1,0,2) # [b,n,dim]
+                outputs_embed[-1] = self.sdfuison_rate*outputs_embed[-1] + tgt
             outputs_logit = self._compute_similarity(outputs_embed, text_feats) # [dec_layers, b,num_queries,num_classes]
         else:
             outputs_logit = torch.stack([self.class_embed[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,dim]

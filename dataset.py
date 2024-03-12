@@ -140,7 +140,6 @@ class BaseDataset(Dataset):
 
         return feature
 
-
     def generate_inner_segment_with_eps(self, origin_seg, eps, start_bound, end_bound):
         origin_length = origin_seg[1] - origin_seg[0]
         
@@ -608,33 +607,29 @@ if __name__ == "__main__":
     setup_seed(seed)
     print(args)
     train_dataset = Thumos14Dataset(subset='train', mode='train', args=args)
-    # print(f"dataset.description:{train_dataset.description_dict}")
-    # print(f"dataset.classes:{train_dataset.classes}")
-    
-    data_loader = DataLoader(train_dataset, batch_size=2, collate_fn=collate_fn, num_workers=2, pin_memory=True, shuffle=True)
-    iters = iter(data_loader)
-    feat, target = next(iters)
-    # print(f"feat.tensors:{feat.tensors.shape}")
-    # print(f"feat.mask:{feat.mask}")
-    # print(f"target:{target}")
-    # print(f"target[0]['segmentation_onehot_labels']: {target[0]['segmentation_onehot_labels']}")
-    # print(f"target[0]['segmentation_onehot_labels'].shape:{target[0]['segmentation_onehot_labels'].shape}")
-    # print(f"target[0]['segmentation_onehot_labels'].dtype:{target[0]['segmentation_onehot_labels'].dtype}")
-    # print(f"target[0]['segmentation_labels'].dtype:{target[0]['segmentation_labels']}")
-    # gt_coordinations = [t['segments'] for t in target]
-    # print(f"gt_coordinations:{gt_coordinations}")
-    # gt_coordinations = torch.cat(gt_coordinations,dim=0) # [batch_instance_num,2]->"center,width"
-    # print(f"gt_coordinations.shape:{gt_coordinations.shape}")
-    # gt_labels = [t['labels'] for t in target]
-    # print(f"gt_labels:{gt_labels}")
-    # gt_labels = torch.cat(gt_labels,dim=0) # [batch_instance_num,1]->"class id"
-    # print(f"gt_labels.shape:{gt_labels.shape}")
-    # print(f"target[0]['mask_labels']:{target[0]['mask_labels']}")
-    print(f"target[0]['semantic_labels']:{target[0]['semantic_labels']}")
-    print(f"target[0]['segments']:{target[0]['segments']}")
-    print(f"target[0]['labels']:{target[0]['labels']}")
-    print(f"target[0]['label_names']:{target[0]['label_names']}")
-    print(f"target[0]['salient_mask']:{target[0]['salient_mask']}")
-    print(f"self.classes:{data_loader.dataset.classes}")
+    val_dataset = Thumos14Dataset(subset='inference', mode='inference', args=args)
+
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, collate_fn=collate_fn, num_workers=args.num_workers, pin_memory=True, shuffle=True, drop_last=True)
+    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, collate_fn=collate_fn, num_workers=args.num_workers, pin_memory=True, shuffle=False, drop_last=False)
+
+    # data_loader = DataLoader(train_dataset, batch_size=2, collate_fn=collate_fn, num_workers=2, pin_memory=True, shuffle=True)
+    # iters = iter(data_loader)
+    # feat, target = next(iters)
+
+    # print(f"target[0]['semantic_labels']:{target[0]['semantic_labels']}")
+    # print(f"target[0]['segments']:{target[0]['segments']}")
+    # print(f"target[0]['labels']:{target[0]['labels']}")
+    # print(f"target[0]['label_names']:{target[0]['label_names']}")
+    # print(f"target[0]['salient_mask']:{target[0]['salient_mask']}")
+    # print(f"self.classes:{data_loader.dataset.classes}")
+    for idx, (samples, targets) in enumerate(train_loader):
+        if idx==0:
+            print(f"first epoch, the targets[0]['segments]:{targets[0]['segments']}")
+
+    # for samples, targets in val_loader:
+    #     pass
+    for idx, (samples, targets) in enumerate(train_loader):
+        if idx==0:
+            print(f"second epoch, the targets[0]['segments]:{targets[0]['segments']}")
 
 # CUDA_VISIBLE_DEVICES=4 python dataset.py --cfg_path "./config/Thumos14_CLIP_8frame.yaml"

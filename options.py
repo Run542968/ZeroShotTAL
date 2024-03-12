@@ -62,6 +62,13 @@ parser.add_argument('--with_iterative_refine', action='store_true', default=Fals
 parser.add_argument('--enc_n_points', type=int, default=4, help="Number of sampled points per head for deformable attention in the encoder")
 parser.add_argument('--dec_n_points', type=int, default=4, help="Number of sampled points per head for deformable attention in the decoder")
 
+## static-dynamic fusion
+parser.add_argument('--enable_sdfuison', action='store_true', default=False)
+parser.add_argument('--sdfuison_rate', type=float, default=1, help="the ratio to fuse CLIP feat to action query")
+
+## background prompt
+parser.add_argument('--enable_bg', action='store_true', default=False)
+
 
 ## posPrior
 parser.add_argument('--enable_posPrior', action='store_true', default=False)
@@ -84,14 +91,14 @@ parser.add_argument('--actionness_loss', action='store_true', default=False)
 parser.add_argument('--actionness_loss_coef', type=float, default=2)
 
 parser.add_argument('--distillation_loss', action='store_true', default=False)
-parser.add_argument('--distillation_loss_coef', type=float, default=1)
+parser.add_argument('--distillation_loss_coef', type=float, default=0.1)
 
 parser.add_argument('--salient_loss', action='store_true', default=False)
 parser.add_argument('--salient_loss_coef', type=float, default=1)
 parser.add_argument('--salient_loss_impl', type=str, default="BCE", choices=('BCE','CE'))
 
 parser.add_argument('--compact_loss', action='store_true', default=False)
-parser.add_argument('--compact_loss_coef', type=float, default=1)
+parser.add_argument('--compact_loss_coef', type=float, default=8e-4)
 
 # Matcher
 parser.add_argument('--set_cost_class', type=float, default=2, help="Class coefficient in the matching cost")
