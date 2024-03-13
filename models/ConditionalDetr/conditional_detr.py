@@ -476,14 +476,17 @@ class ConditionalDETR(nn.Module):
                     tgt = self.fusion_attn(query=query_feat,
                                                 key=segment_feat,
                                                 value=segment_feat)[0] # [1,n*b,dim]
+                    tgt = tgt.reshape(n,b,dim).permute(1,0,2) # [b,n,dim]
                 elif self.fusion_type=="non_parameter":
                     attention_scores = torch.einsum("lbd,rbd->lbr",query_feat,segment_feat)
                     attention_scores = attention_scores / math.sqrt(dim)
                     attention_probs = F.softmax(attention_scores, dim = -1)
                     tgt = torch.einsum("lbr,rbd->lbd",attention_probs, segment_feat) # [1,n*b,dim]
+                    tgt = tgt.reshape(n,b,dim).permute(1,0,2) # [b,n,dim]
+                elif self.fusion_type=="average":
+                    tgt = roi_feat.mean(2) # [bs,num_queries,dim]
                 else:
                     raise ValueError
-                tgt = tgt.reshape(n,b,dim).permute(1,0,2) # [b,n,dim]
                 outputs_embed[-1] = self.sdfuison_rate*outputs_embed[-1] + tgt
             outputs_logit = self._compute_similarity(outputs_embed, text_feats) # [dec_layers, b,num_queries,num_classes]
         else:
