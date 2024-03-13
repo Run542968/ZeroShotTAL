@@ -127,8 +127,9 @@ class ConditionalDETR(nn.Module):
 
         self.compact_loss = args.compact_loss
 
-        self.enable_sdfuison = args.enable_sdfuison
+        self.enable_sdfusion = args.enable_sdfusion
         self.sdfuison_rate = args.sdfuison_rate
+        self.fusion_type = args.fusion_type
 
         hidden_dim = transformer.d_model
 
@@ -204,7 +205,7 @@ class ConditionalDETR(nn.Module):
             
             self.compact_head = ProbObjectnessHead(hidden_dim)
 
-        if self.enable_sdfuison:
+        if self.enable_sdfusion:
             self.fusion_attn = nn.MultiheadAttention(hidden_dim, num_heads=4, dropout=0.2)
 
         # following TadTR
@@ -462,7 +463,7 @@ class ConditionalDETR(nn.Module):
                 query_embed = outputs_embed.reshape(l*b,n,dim).permute(1,0,2) # [l*b,n,dim]->[n,l*b,dim]
                 tgt = self.dynamic_attn(query=query_embed, key=dynamics, value=dynamics)[0] # [n,l*b,dim]
                 outputs_embed = (query_embed + self.element_rate*tgt).permute(1,0,2).reshape(l,b,n,dim) # [n,l*b,dim]->[l*b,n,dim]->[l,b,n,dim]
-            if self.enable_sdfuison: # fuse the clip feat into query embedding via cross-attention
+            if self.enable_sdfusion: # fuse the clip feat into query embedding via cross-attention
                 roi_feat = self._roi_align(out['pred_boxes'],clip_feat,mask,self.ROIalign_size).squeeze() # [bs,num_queries,ROIalign_size,dim]
 
                 query_feat = outputs_embed[-1].permute(1,0,2) # [num_queries,b,dim]
@@ -471,9 +472,17 @@ class ConditionalDETR(nn.Module):
                 segment_feat = segment_feat.reshape(RoIsize,n*b,dim) # [RoIsize,n*b,dim]
                 query_feat = query_feat.reshape(1,n*b,dim) # [1,n*b,dim]
 
-                tgt = self.fusion_attn(query=query_feat,
-                                            key=segment_feat,
-                                            value=segment_feat)[0] # [1,n*b,dim]
+                if self.fusion_type=="parameter":
+                    tgt = self.fusion_attn(query=query_feat,
+                                                key=segment_feat,
+                                                value=segment_feat)[0] # [1,n*b,dim]
+                elif self.fusion_type=="non_parameter":
+                    attention_scores = torch.einsum("lbd,rbd->lbr",query_feat,segment_feat)
+                    attention_scores = attention_scores / math.sqrt(dim)
+                    attention_probs = F.softmax(attention_scores, dim = -1)
+                    tgt = torch.einsum("lbr,rbd->lbd",attention_probs, segment_feat) # [1,n*b,dim]
+                else:
+                    raise ValueError
                 tgt = tgt.reshape(n,b,dim).permute(1,0,2) # [b,n,dim]
                 outputs_embed[-1] = self.sdfuison_rate*outputs_embed[-1] + tgt
             outputs_logit = self._compute_similarity(outputs_embed, text_feats) # [dec_layers, b,num_queries,num_classes]

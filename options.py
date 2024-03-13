@@ -63,8 +63,9 @@ parser.add_argument('--enc_n_points', type=int, default=4, help="Number of sampl
 parser.add_argument('--dec_n_points', type=int, default=4, help="Number of sampled points per head for deformable attention in the decoder")
 
 ## static-dynamic fusion
-parser.add_argument('--enable_sdfuison', action='store_true', default=False)
+parser.add_argument('--enable_sdfusion', action='store_true', default=False)
 parser.add_argument('--sdfuison_rate', type=float, default=1, help="the ratio to fuse CLIP feat to action query")
+parser.add_argument('--fusion_type', type=str, default="parameter", choices=("parameter","non_parameter"), help="the approach to fusion the feat")
 
 ## background prompt
 parser.add_argument('--enable_bg', action='store_true', default=False)
