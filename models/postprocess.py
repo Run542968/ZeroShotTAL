@@ -15,6 +15,7 @@ class PostProcess(nn.Module):
         self.actionness_loss = args.actionness_loss
         self.temperature = 1
         self.prob_type = args.prob_type
+        self.enable_bg = args.enable_bg
 
     @torch.no_grad()
     def forward(self, outputs, target_sizes):
@@ -26,6 +27,7 @@ class PostProcess(nn.Module):
         out_bbox = outputs['pred_boxes'] # [bs,num_queries,2]
         assert 'class_logits' in outputs
         class_logits = outputs['class_logits'] #  [bs,num_queries,num_classes] 
+
 
         if self.actionness_loss: # [bs,num_queries,1]
             assert 'actionness_logits' in outputs
@@ -51,6 +53,8 @@ class PostProcess(nn.Module):
             else:
                 raise NotImplementedError
 
+        if self.enable_bg:
+            prob = prob[:,:,:-1]
 
         B,Q,num_classes = prob.shape
         assert len(prob) == len(target_sizes)

@@ -65,11 +65,16 @@ class SetCriterion(nn.Module):
         self.compact_loss = args.compact_loss
         self.min_obj=-512*math.log(0.9)
 
+        self.enable_bg = args.enable_bg
 
         if self.actionness_loss:
             self.base_losses = ['labels','actionness','boxes']
         else:
             self.base_losses = ['labels', 'boxes']
+
+        if self.enable_bg:
+            self.base_losses.remove('labels')
+            self.base_losses.append('labels_bg')
 
     def loss_labels(self, outputs, targets, indices, num_boxes, log=True):
         """Classification loss (Binary focal loss)
@@ -96,6 +101,33 @@ class SetCriterion(nn.Module):
             # TODO this should probably be a separate loss, not hacked in this one here
             losses['class_error'] = 100 - accuracy(src_logits[idx], target_classes_o)[0] # [batch_matched_queries,num_classes]
         return losses
+
+    def loss_labels_bg(self, outputs, targets, indices, num_boxes, log=True):
+        """Classification loss (Binary focal loss)
+        targets dicts must contain the key "labels" containing a tensor of dim [nb_target_boxes]
+        """
+        assert 'class_logits' in outputs
+        src_logits = outputs['class_logits'] # [bs,num_queries,num_classes]
+ 
+        idx = self._get_src_permutation_idx(indices) # (batch_idx,src_idx)
+        target_classes_o = torch.cat([t["semantic_labels"][J] for t, (_, J) in zip(targets, indices)]) # [batch_target_class_id]
+        target_classes = torch.full(src_logits.shape[:2], src_logits.shape[2]-1,
+                                    dtype=torch.int64, device=src_logits.device) # [bs,num_queries]
+        target_classes[idx] = target_classes_o # [bs,num_queries]
+
+        target_classes_onehot = torch.zeros([src_logits.shape[0], src_logits.shape[1], src_logits.shape[2]],
+                                            dtype=src_logits.dtype, layout=src_logits.layout, device=src_logits.device) # [bs,num_queries,num_classes]
+        target_classes_onehot.scatter_(2, target_classes.unsqueeze(-1), 1)
+
+        # target_classes_onehot = target_classes_onehot[:,:,:-1] # [bs,num_queries,num_classes]
+        loss_ce_bg = sigmoid_focal_loss(src_logits, target_classes_onehot, num_boxes, alpha=self.focal_alpha, gamma=self.gamma) * src_logits.shape[1]
+        losses = {'loss_ce_bg': loss_ce_bg}
+
+        if log:
+            # TODO this should probably be a separate loss, not hacked in this one here
+            losses['class_error'] = 100 - accuracy(src_logits[idx], target_classes_o)[0] # [batch_matched_queries,num_classes]
+        return losses
+
 
     def loss_boxes(self, outputs, targets, indices, num_boxes):
         """Compute the losses related to the bounding boxes, the L1 regression loss and the GIoU loss
@@ -228,7 +260,8 @@ class SetCriterion(nn.Module):
         loss_map = {
             'labels': self.loss_labels,
             'boxes': self.loss_boxes,
-            'actionness': self.loss_actionness
+            'actionness': self.loss_actionness,
+            'labels_bg': self.loss_labels_bg
         }
         assert loss in loss_map, f'do you really want to compute {loss} loss?'
         return loss_map[loss](outputs, targets, indices, num_boxes, **kwargs)

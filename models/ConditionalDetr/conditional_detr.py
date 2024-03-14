@@ -131,6 +131,8 @@ class ConditionalDETR(nn.Module):
         self.sdfuison_rate = args.sdfuison_rate
         self.fusion_type = args.fusion_type
 
+        self.enable_bg = args.enable_bg
+
         hidden_dim = transformer.d_model
 
 
@@ -207,6 +209,9 @@ class ConditionalDETR(nn.Module):
 
         if self.enable_sdfusion:
             self.fusion_attn = nn.MultiheadAttention(hidden_dim, num_heads=4, dropout=0.2)
+
+        if self.enable_bg:
+            self.bg_embedding = nn.Embedding(1,hidden_dim)
 
         # following TadTR
         num_pred = transformer.decoder.num_layers
@@ -425,7 +430,8 @@ class ConditionalDETR(nn.Module):
                     text_feats = self.get_text_feats(classes_name, description_dict, self.device, self.target_type) # [N classes,dim]
                 else:
                     raise NotImplementedError
-
+            if self.enable_bg:
+                text_feats = torch.cat([text_feats,self.bg_embedding.weight],dim=0) # [num_classes+1,dim]
                 
         # feed into model
         src, mask = feature.decompose()
@@ -609,7 +615,8 @@ def build(args, device):
         weight_dict['loss_distillation'] = args.distillation_loss_coef
     if args.compact_loss:
         weight_dict['loss_compact'] = args.compact_loss_coef
-
+    if args.enable_bg:
+        weight_dict['loss_ce_bg'] = args.cls_loss_coef
 
 
     # TODO this is a hack
