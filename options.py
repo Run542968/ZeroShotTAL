@@ -70,6 +70,9 @@ parser.add_argument('--fusion_type', type=str, default="parameter", choices=("pa
 ## background prompt
 parser.add_argument('--enable_bg', action='store_true', default=False)
 
+parser.add_argument('--bgText_loss', action='store_true', default=False)
+parser.add_argument('--bgText_loss_coef', type=float, default=1)
+
 
 ## posPrior
 parser.add_argument('--enable_posPrior', action='store_true', default=False)

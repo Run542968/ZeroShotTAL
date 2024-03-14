@@ -132,7 +132,7 @@ class ConditionalDETR(nn.Module):
         self.fusion_type = args.fusion_type
 
         self.enable_bg = args.enable_bg
-
+        self.bgText_loss = args.bgText_loss
         hidden_dim = transformer.d_model
 
 
@@ -421,6 +421,8 @@ class ConditionalDETR(nn.Module):
         feature_list, pos_list = self.backbone(samples) # list of [b,t,c], list of [b,t,c]
         feature, pos = feature_list[-1], pos_list[-1]
 
+        out = {}
+
         # prepare text target
         if self.target_type != "none":
             with torch.no_grad():
@@ -432,7 +434,10 @@ class ConditionalDETR(nn.Module):
                     raise NotImplementedError
             if self.enable_bg:
                 text_feats = torch.cat([text_feats,self.bg_embedding.weight],dim=0) # [num_classes+1,dim]
-                
+                if self.bgText_loss:
+                    out['text_feats'] = text_feats
+
+
         # feed into model
         src, mask = feature.decompose()
         assert mask is not None
@@ -441,7 +446,6 @@ class ConditionalDETR(nn.Module):
         memory, hs, reference = self.transformer(src, mask, self.query_embed.weight, pos) # return: [enc_layers, b,t,c], [dec_layers,b,num_queries,c], [b,num_queries,1]
 
         # record result
-        out = {}
         out['memory'] = memory
         out['hs'] = hs
 
@@ -617,7 +621,8 @@ def build(args, device):
         weight_dict['loss_compact'] = args.compact_loss_coef
     if args.enable_bg:
         weight_dict['loss_ce_bg'] = args.cls_loss_coef
-
+    if args.bgText_loss:
+        weight_dict['loss_bgText'] = args.bgText_loss_coef
 
     # TODO this is a hack
     if args.aux_loss:

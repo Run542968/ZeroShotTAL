@@ -67,6 +67,8 @@ class SetCriterion(nn.Module):
 
         self.enable_bg = args.enable_bg
 
+        self.bgText_loss = args.bgText_loss
+
         if self.actionness_loss:
             self.base_losses = ['labels','actionness','boxes']
         else:
@@ -244,6 +246,18 @@ class SetCriterion(nn.Module):
         pred_obj = outputs["compact_value"][idx]
         return  {'loss_compact': torch.clamp(pred_obj, min=self.min_obj).sum()/ num_boxes}
 
+    def loss_bgText(self, outputs, targets, indices, num_boxes):
+        assert 'text_feats' in outputs
+        text_feats = outputs['text_feats'] # [num_classes+1,dim]
+ 
+        text_embeddings = text_feats[:-1] # [num_classes,dim]
+        bg_embedding = text_feats[-1] # [dim]
+
+        similarities = F.cosine_similarity(bg_embedding.unsqueeze(0), text_embeddings, dim=-1) # [1,num_classes]
+
+        bgText_loss = 1+similarities.mean()
+        return  {'loss_bgText': bgText_loss}
+
     def _get_src_permutation_idx(self, indices):
         # permute predictions following indices
         batch_idx = torch.cat([torch.full_like(src, i) for i, (src, _) in enumerate(indices)])
@@ -336,6 +350,9 @@ class SetCriterion(nn.Module):
             compact_loss = self.loss_compact(outputs, targets, indices, num_boxes)
             losses.update(compact_loss)
 
+        if self.bgText_loss:
+            bgText_loss = self.loss_bgText(outputs,targets,indices,num_boxes)
+            losses.update(bgText_loss)
 
         return losses
 
