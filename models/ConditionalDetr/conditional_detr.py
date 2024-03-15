@@ -131,8 +131,13 @@ class ConditionalDETR(nn.Module):
         self.sdfuison_rate = args.sdfuison_rate
         self.fusion_type = args.fusion_type
 
+        self.enable_sdfusionAct = args.enable_sdfusionAct
+        self.sdfuisonAct_rate = args.sdfuisonAct_rate
+        self.fusionAct_type = args.fusionAct_type
+
         self.enable_bg = args.enable_bg
         self.bgText_loss = args.bgText_loss
+
         hidden_dim = transformer.d_model
 
 
@@ -208,7 +213,24 @@ class ConditionalDETR(nn.Module):
             self.compact_head = ProbObjectnessHead(hidden_dim)
 
         if self.enable_sdfusion:
-            self.fusion_attn = nn.MultiheadAttention(hidden_dim, num_heads=4, dropout=0.2)
+            if self.fusion_type == "parameter":
+                self.fusion_attn = nn.MultiheadAttention(hidden_dim, num_heads=4, dropout=0.2)
+                self.fa_q_proj = nn.Linear(hidden_dim, hidden_dim)
+                self.fa_k_proj = nn.Linear(hidden_dim, hidden_dim)
+                self.fa_v_proj = nn.Linear(hidden_dim, hidden_dim)
+            
+        if self.enable_sdfusionAct:
+            if self.fusionAct_type == "parameter":
+                self.fusionAct_attn = nn.MultiheadAttention(hidden_dim, num_heads=4, dropout=0.2)
+                self.faAct_q_proj = nn.Linear(hidden_dim, hidden_dim)
+                self.faAct_k_proj = nn.Linear(hidden_dim, hidden_dim)
+                self.faAct_v_proj = nn.Linear(hidden_dim, hidden_dim)
+            self.fusion_proj = nn.Linear(hidden_dim, hidden_dim)
+           # init prior_prob setting for focal loss
+            prior_prob = 0.01
+            bias_value = -math.log((1 - prior_prob) / prior_prob)
+            self.fusion_proj.bias.data = torch.ones(hidden_dim) * bias_value
+            
 
         if self.enable_bg:
             self.bg_embedding = nn.Embedding(1,hidden_dim)
@@ -225,7 +247,8 @@ class ConditionalDETR(nn.Module):
             if self.compact_loss:
                 self.compact_proj = _get_clones(self.compact_proj, num_pred)
                 self.compact_head =  _get_clones(self.compact_head, num_pred)
-
+            if self.enable_sdfusionAct:
+                self.fusion_proj = _get_clones(self.fusion_proj, num_pred)
         else: # shared parameters for each laryer
             self.class_embed = nn.ModuleList([self.class_embed for _ in range(num_pred)])
             nn.init.constant_(self.bbox_embed.layers[-1].bias.data[1:], -2.0)
@@ -235,7 +258,8 @@ class ConditionalDETR(nn.Module):
             if self.compact_loss:
                 self.compact_proj = nn.ModuleList([self.compact_proj for _ in range(num_pred)])
                 self.compact_head = nn.ModuleList([self.compact_head for _ in range(num_pred)])
-
+            if self.enable_sdfusionAct:
+                self.fusion_proj = nn.ModuleList([self.fusion_proj for _ in range(num_pred)])
 
         if self.target_type != "none":
             logger.info(f"The target_type is {self.target_type}, using text embedding as target, on task: {args.task}!")
@@ -473,7 +497,8 @@ class ConditionalDETR(nn.Module):
                 query_embed = outputs_embed.reshape(l*b,n,dim).permute(1,0,2) # [l*b,n,dim]->[n,l*b,dim]
                 tgt = self.dynamic_attn(query=query_embed, key=dynamics, value=dynamics)[0] # [n,l*b,dim]
                 outputs_embed = (query_embed + self.element_rate*tgt).permute(1,0,2).reshape(l,b,n,dim) # [n,l*b,dim]->[l*b,n,dim]->[l,b,n,dim]
-            if self.enable_sdfusion: # fuse the clip feat into query embedding via cross-attention
+            
+            elif self.enable_sdfusion: # fuse the clip feat into query embedding via cross-attention
                 roi_feat = self._roi_align(out['pred_boxes'],clip_feat,mask,self.ROIalign_size).squeeze() # [bs,num_queries,ROIalign_size,dim]
 
                 query_feat = outputs_embed[-1].permute(1,0,2) # [num_queries,b,dim]
@@ -483,9 +508,9 @@ class ConditionalDETR(nn.Module):
                 query_feat = query_feat.reshape(1,n*b,dim) # [1,n*b,dim]
 
                 if self.fusion_type=="parameter":
-                    tgt = self.fusion_attn(query=query_feat,
-                                                key=segment_feat,
-                                                value=segment_feat)[0] # [1,n*b,dim]
+                    tgt = self.fusion_attn(query=self.fa_q_proj(query_feat),
+                                                key=self.fa_k_proj(segment_feat),
+                                                value=self.fa_v_proj(segment_feat))[0] # [1,n*b,dim]
                     tgt = tgt.reshape(n,b,dim).permute(1,0,2) # [b,n,dim]
                 elif self.fusion_type=="non_parameter":
                     attention_scores = torch.einsum("lbd,rbd->lbr",query_feat,segment_feat)
@@ -498,6 +523,8 @@ class ConditionalDETR(nn.Module):
                 else:
                     raise ValueError
                 outputs_embed[-1] = self.sdfuison_rate*outputs_embed[-1] + tgt
+            else:
+                pass
             outputs_logit = self._compute_similarity(outputs_embed, text_feats) # [dec_layers, b,num_queries,num_classes]
         else:
             outputs_logit = torch.stack([self.class_embed[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,dim]
@@ -512,8 +539,36 @@ class ConditionalDETR(nn.Module):
                 compact_value = torch.stack([self.compact_head[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries]
                 out['compact_value'] = compact_value[-1]
                 actionness_logits = torch.stack([self.actionness_embed[lvl](compact_feature[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,1]
+            elif self.enable_sdfusionAct: # fuse the clip feat into query embedding via cross-attention
+                static_feature = torch.stack([self.fusion_proj[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,dim]
+                roi_feat = self._roi_align(out['pred_boxes'],clip_feat,mask,self.ROIalign_size).squeeze() # [bs,num_queries,ROIalign_size,dim]
+
+                query_feat = static_feature[-1].permute(1,0,2) # [num_queries,b,dim]
+                segment_feat = roi_feat.permute(2,1,0,3) # [RoIsize,num_queries,b,dim]
+                RoIsize,n,b,dim = segment_feat.shape
+                segment_feat = segment_feat.reshape(RoIsize,n*b,dim) # [RoIsize,n*b,dim]
+                query_feat = query_feat.reshape(1,n*b,dim) # [1,n*b,dim]
+
+                if self.fusionAct_type=="parameter":
+                    tgt = self.fusionAct_attn(query=self.faAct_q_proj(query_feat),
+                                                key=self.faAct_k_proj(segment_feat),
+                                                value=self.faAct_v_proj(segment_feat))[0] # [1,n*b,dim]
+                    tgt = tgt.reshape(n,b,dim).permute(1,0,2) # [b,n,dim]
+                elif self.fusionAct_type=="non_parameter":
+                    attention_scores = torch.einsum("lbd,rbd->lbr",query_feat,segment_feat)
+                    attention_scores = attention_scores / math.sqrt(dim)
+                    attention_probs = F.softmax(attention_scores, dim = -1)
+                    tgt = torch.einsum("lbr,rbd->lbd",attention_probs, segment_feat) # [1,n*b,dim]
+                    tgt = tgt.reshape(n,b,dim).permute(1,0,2) # [b,n,dim]
+                elif self.fusionAct_type=="average":
+                    tgt = roi_feat.mean(2) # [bs,num_queries,dim]
+                else:
+                    raise ValueError
+                static_feature[-1] = static_feature[-1] + self.sdfuisonAct_rate*tgt
+                actionness_logits = torch.stack([self.actionness_embed[lvl](static_feature[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,1]
             else:
                 actionness_logits = torch.stack([self.actionness_embed[lvl](hs[lvl]) for lvl in range(hs.shape[0])]) # [dec_layers,b,num_queries,1]
+
             out['actionness_logits'] = actionness_logits[-1]
 
 
