@@ -61,6 +61,34 @@ Zero-Shot:
                     CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_ActivityNet13_base_act_sdfusion_14" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --enable_sdfusion --sdfuison_rate 0.1 --fusion_type "non_parameter"
                     # --enable_sdfusion --sdfuison_rate 0.01 --fusion_type "non_parameter" :: 25.00401
                     CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_ActivityNet13_base_act_sdfusion_15" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --enable_sdfusion --sdfuison_rate 0.01 --fusion_type "non_parameter"
+                  
+                  base + actionness + sdfusionAct:
+                    # --enable_sdfusionAct --fusionAct_type "parameter" :: 18.9007
+                    CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_ActivityNet13_base_act_sdfusionAct" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --enable_sdfusionAct --fusionAct_type "parameter"
+                    # --enable_sdfusionAct --fusionAct_type "parameter" --sdfuisonAct_rate 0.5 :: 18.72398
+                    CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_ActivityNet13_base_act_sdfusionAct_1" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --enable_sdfusionAct --fusionAct_type "parameter" --sdfuisonAct_rate 0.5
+                    # --enable_sdfusionAct --fusionAct_type "parameter" --enable_ensemble --ensemble_rate 0 :: 27.90389
+                    CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_ActivityNet13_base_act_sdfusionAct_ensem" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --enable_sdfusionAct --fusionAct_type "parameter" --enable_ensemble --ensemble_rate 0
+                    # --enable_sdfusionAct --fusionAct_type "parameter" --enable_ensemble --ensemble_rate 0.1 :: 27.89258
+                    CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_ActivityNet13_base_act_sdfusionAct_ensem_1" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --enable_sdfusionAct --fusionAct_type "parameter" --enable_ensemble --ensemble_rate 0.1
+                    
+                    # --enable_sdfusionAct --fusionAct_type "non_parameter" :: 19.64659
+                    CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_ActivityNet13_base_act_sdfusionAct_nopara" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --enable_sdfusionAct --fusionAct_type "non_parameter"
+                    # --enable_sdfusionAct --fusionAct_type "non_parameter" --sdfuisonAct_rate 0.5 :: 19.72156
+                    CUDA_VISIBLE_DEVICES=5 python main.py --model_name "prcv_ActivityNet13_base_act_sdfusionAct_nopara_1" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --enable_sdfusionAct --fusionAct_type "non_parameter" --sdfuisonAct_rate 0.5
+                    # --enable_sdfusionAct --fusionAct_type "non_parameter" --enable_ensemble --ensemble_rate 0 :: 28.19135
+                    CUDA_VISIBLE_DEVICES=6 python main.py --model_name "prcv_ActivityNet13_base_act_sdfusionAct_nopara_ensem" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --enable_sdfusionAct --fusionAct_type "non_parameter" --enable_ensemble --ensemble_rate 0
+                    # --enable_sdfusionAct --fusionAct_type "non_parameter" --enable_ensemble --ensemble_rate 0.1 :: 28.16873
+                    CUDA_VISIBLE_DEVICES=7 python main.py --model_name "prcv_ActivityNet13_base_act_sdfusionAct_nopara_ensem_1" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --enable_sdfusionAct --fusionAct_type "non_parameter" --enable_ensemble --ensemble_rate 0.1
+                    
+                    # --enable_sdfusionAct --fusionAct_type "average" :: 19.14553
+                    CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_ActivityNet13_base_act_sdfusionAct_avg" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --enable_sdfusionAct --fusionAct_type "average"
+                    # --enable_sdfusionAct --fusionAct_type "average" --sdfuisonAct_rate 0.5 :: 19.13411
+                    CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_ActivityNet13_base_act_sdfusionAct_avg_1" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --enable_sdfusionAct --fusionAct_type "average" --sdfuisonAct_rate 0.5
+                    # --enable_sdfusionAct --fusionAct_type "average" --enable_ensemble --ensemble_rate 0 :: 28.33571
+                    CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_ActivityNet13_base_act_sdfusionAct_avg_ensem" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --enable_sdfusionAct --fusionAct_type "average" --enable_ensemble --ensemble_rate 0
+                    # --enable_sdfusionAct --fusionAct_type "average" --enable_ensemble --ensemble_rate 0.1 :: 28.4341
+                    CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_ActivityNet13_base_act_sdfusionAct_avg_ensem_1" --cfg_path "./config/ActivityNet13_CLIP_zs_75.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 5 --enc_layers 2 --dec_layers 2 --enable_backbone --lr_backbone 1e-2 --actionness_loss --enable_sdfusionAct --fusionAct_type "average" --enable_ensemble --ensemble_rate 0.1
                     
                   base + actionness + sdfusion + bg:
                     # --enable_sdfusion --sdfuison_rate 0.0 --fusion_type "average" --enable_bg :: 27.16113
@@ -221,6 +249,34 @@ Zero-Shot:
                     # --enable_sdfusion --sdfuison_rate 0.01 --fusion_type "non_parameter" :: 26.6682
                     CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_Thumos14_base_act_sdfusion_15" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --enable_sdfusion --sdfuison_rate 0.01 --fusion_type "non_parameter"
 
+                  base + actionness + sdfusionAct:
+                    # --enable_sdfusionAct --fusionAct_type "parameter" :: 20.18652
+                    CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_Thumos14_base_act_sdfusionAct" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --enable_sdfusionAct --fusionAct_type "parameter"
+                    # --enable_sdfusionAct --fusionAct_type "parameter" --sdfuisonAct_rate 0.5 :: 22.71845
+                    CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_Thumos14_base_act_sdfusionAct_1" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --enable_sdfusionAct --fusionAct_type "parameter" --sdfuisonAct_rate 0.5
+                    # --enable_sdfusionAct --fusionAct_type "parameter" --enable_ensemble --ensemble_rate 0 :: 35.77328
+                    CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_Thumos14_base_act_sdfusionAct_ensem" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --enable_sdfusionAct --fusionAct_type "parameter" --enable_ensemble --ensemble_rate 0
+                    # --enable_sdfusionAct --fusionAct_type "parameter" --enable_ensemble --ensemble_rate 0.1 :: 35.83135
+                    CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_Thumos14_base_act_sdfusionAct_ensem_1" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --enable_sdfusionAct --fusionAct_type "parameter" --enable_ensemble --ensemble_rate 0.1
+                    
+                    # --enable_sdfusionAct --fusionAct_type "non_parameter" :: 19.48925
+                    CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_Thumos14_base_act_sdfusionAct_nonpara" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --enable_sdfusionAct --fusionAct_type "non_parameter"
+                    # --enable_sdfusionAct --fusionAct_type "non_parameter" --sdfuisonAct_rate 0.5 :: 22.38006
+                    CUDA_VISIBLE_DEVICES=5 python main.py --model_name "prcv_Thumos14_base_act_sdfusionAct_nonpara_1" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --enable_sdfusionAct --fusionAct_type "non_parameter" --sdfuisonAct_rate 0.5
+                    # --enable_sdfusionAct --fusionAct_type "non_parameter" --enable_ensemble --ensemble_rate 0 :: 33.51049
+                    CUDA_VISIBLE_DEVICES=6 python main.py --model_name "prcv_Thumos14_base_act_sdfusionAct_nonpara_ensem" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --enable_sdfusionAct --fusionAct_type "non_parameter" --enable_ensemble --ensemble_rate 0
+                     # --enable_sdfusionAct --fusionAct_type "non_parameter" --enable_ensemble --ensemble_rate 0.1 :: 33.64821
+                    CUDA_VISIBLE_DEVICES=7 python main.py --model_name "prcv_Thumos14_base_act_sdfusionAct_nonpara_ensem_1" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --enable_sdfusionAct --fusionAct_type "non_parameter" --enable_ensemble --ensemble_rate 0.1
+                    
+                    # --enable_sdfusionAct --fusionAct_type "average" :: 19.31533
+                    CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_Thumos14_base_act_sdfusionAct_avg" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --enable_sdfusionAct --fusionAct_type "average"
+                    # --enable_sdfusionAct --fusionAct_type "average" --sdfuisonAct_rate 0.5 :: 19.00025
+                    CUDA_VISIBLE_DEVICES=5 python main.py --model_name "prcv_Thumos14_base_act_sdfusionAct_avg_1" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --enable_sdfusionAct --fusionAct_type "average" --sdfuisonAct_rate 0.5
+                    # --enable_sdfusionAct --fusionAct_type "average" --enable_ensemble --ensemble_rate 0 :: 31.15582
+                    CUDA_VISIBLE_DEVICES=6 python main.py --model_name "prcv_Thumos14_base_act_sdfusionAct_avg_ensem" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --enable_sdfusionAct --fusionAct_type "average" --enable_ensemble --ensemble_rate 0
+                    # --enable_sdfusionAct --fusionAct_type "average" --enable_ensemble --ensemble_rate 0.1 :: 31.06163
+                    CUDA_VISIBLE_DEVICES=7 python main.py --model_name "prcv_Thumos14_base_act_sdfusionAct_avg_ensem_1" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --enable_sdfusionAct --fusionAct_type "average" --enable_ensemble --ensemble_rate 0.1
+                    
                   base + actionness + sdfusion + bg:
                     # --enable_bg :: 27.68538
                     CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_Thumos14_base_act_sdfusion_bg" --cfg_path "./config/Thumos14_CLIP_zs_75_8frame.yaml" --save_result --batch_size 16 --lr 1e-4 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 5 --actionness_loss --enable_sdfusion --sdfuison_rate 0 --fusion_type "average" --enable_bg
@@ -376,7 +432,35 @@ Zero-Shot:
                   CUDA_VISIBLE_DEVICES=4 python main.py --model_name "prcv_Thumos14_50_base_act_sdfusion_4" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --enable_sdfusion --sdfuison_rate 0.1 --fusion_type "average"
                   # --enable_sdfusion --sdfuison_rate 0.01 --fusion_type "average" :: 24.84452
                   CUDA_VISIBLE_DEVICES=6 python main.py --model_name "prcv_Thumos14_50_base_act_sdfusion_5" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --enable_sdfusion --sdfuison_rate 0.01 --fusion_type "average"
-                  
+                
+                base + actionness + sdfusionAct:
+                    # --enable_sdfusionAct --fusionAct_type "parameter" :: 
+                    CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_Thumos14_50_base_act_sdfusionAct" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --enable_sdfusionAct --fusionAct_type "parameter"
+                    # --enable_sdfusionAct --fusionAct_type "parameter" --sdfuisonAct_rate 0.5 ::
+                    CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_Thumos14_50_base_act_sdfusionAct_1" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --enable_sdfusionAct --fusionAct_type "parameter" --sdfuisonAct_rate 0.5
+                    # --enable_sdfusionAct --fusionAct_type "parameter" --enable_ensemble --ensemble_rate 0 ::
+                    CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_Thumos14_50_base_act_sdfusionAct_ensem" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --enable_sdfusionAct --fusionAct_type "parameter" --enable_ensemble --ensemble_rate 0
+                    # --enable_sdfusionAct --fusionAct_type "parameter" --enable_ensemble --ensemble_rate 0.1 :: 
+                    CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_Thumos14_50_base_act_sdfusionAct_ensem_1" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --enable_sdfusionAct --fusionAct_type "parameter" --enable_ensemble --ensemble_rate 0.1
+                    
+                    # --enable_sdfusionAct --fusionAct_type "non_parameter" :: 
+                    CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_Thumos14_50_base_act_sdfusionAct_nonpara" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --enable_sdfusionAct --fusionAct_type "non_parameter"
+                    # --enable_sdfusionAct --fusionAct_type "non_parameter" --sdfuisonAct_rate 0.5 ::
+                    CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_Thumos14_50_base_act_sdfusionAct_nonpara_1" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --enable_sdfusionAct --fusionAct_type "non_parameter" --sdfuisonAct_rate 0.5
+                    # --enable_sdfusionAct --fusionAct_type "non_parameter" --enable_ensemble --ensemble_rate 0 ::
+                    CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_Thumos14_50_base_act_sdfusionAct_nonpara_ensem" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --enable_sdfusionAct --fusionAct_type "non_parameter" --enable_ensemble --ensemble_rate 0
+                     # --enable_sdfusionAct --fusionAct_type "non_parameter" --enable_ensemble --ensemble_rate 0.1 ::
+                    CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_Thumos14_50_base_act_sdfusionAct_nonpara_ensem_1" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --enable_sdfusionAct --fusionAct_type "non_parameter" --enable_ensemble --ensemble_rate 0.1
+                    
+                    # --enable_sdfusionAct --fusionAct_type "average" :: 
+                    CUDA_VISIBLE_DEVICES=0 python main.py --model_name "prcv_Thumos14_50_base_act_sdfusionAct_avg" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --enable_sdfusionAct --fusionAct_type "average"
+                    # --enable_sdfusionAct --fusionAct_type "average" --sdfuisonAct_rate 0.5 :: 
+                    CUDA_VISIBLE_DEVICES=1 python main.py --model_name "prcv_Thumos14_50_base_act_sdfusionAct_avg_1" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --enable_sdfusionAct --fusionAct_type "average" --sdfuisonAct_rate 0.5
+                    # --enable_sdfusionAct --fusionAct_type "average" --enable_ensemble --ensemble_rate 0 :: 
+                    CUDA_VISIBLE_DEVICES=2 python main.py --model_name "prcv_Thumos14_50_base_act_sdfusionAct_avg_ensem" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --enable_sdfusionAct --fusionAct_type "average" --enable_ensemble --ensemble_rate 0
+                    # --enable_sdfusionAct --fusionAct_type "average" --enable_ensemble --ensemble_rate 0.1 ::
+                    CUDA_VISIBLE_DEVICES=3 python main.py --model_name "prcv_Thumos14_50_base_act_sdfusionAct_avg_ensem_1" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --enable_sdfusionAct --fusionAct_type "average" --enable_ensemble --ensemble_rate 0.1
+                    
                 base + actionness + distillation:
                   # bacic
                   CUDA_VISIBLE_DEVICES=6 python main.py --model_name "prcv_Thumos14_50_base_act_dis" --cfg_path "./config/Thumos14_CLIP_zs_50_8frame.yaml" --save_result --batch_size 16 --lr 5e-5 --epochs 100 --num_queries 40 --enc_layers 2 --dec_layers 4 --split_id 2 --actionness_loss --distillation_loss --distillation_loss_coef 0.1

@@ -271,6 +271,9 @@ class BaseDataset(Dataset):
 
         return video_feat, target
 
+
+
+
 class Thumos14Dataset(BaseDataset):
     def __init__(self, subset, mode, args):
         subset_mapping = {"train":"val","inference":"test"}
@@ -491,10 +494,6 @@ class Thumos14Dataset(BaseDataset):
 
         return feature
 
-
-
-
-
 class ActivityNet13Dataset(BaseDataset):
     def __init__(self, subset, mode, args):
         subset_mapping = {"train":"train","inference":"val"}
@@ -597,39 +596,3 @@ class ActivityNet13Dataset(BaseDataset):
 
 
 
-
-if __name__ == "__main__":
-    from utils.util import get_logger, setup_seed
-    args = options.parser.parse_args()
-    if args.cfg_path is not None:
-        args = merge_cfg_from_file(args,args.cfg_path) # NOTE that the config comes from yaml file is the latest one.
-    seed=args.seed
-    setup_seed(seed)
-    print(args)
-    train_dataset = Thumos14Dataset(subset='train', mode='train', args=args)
-    val_dataset = Thumos14Dataset(subset='inference', mode='inference', args=args)
-
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, collate_fn=collate_fn, num_workers=args.num_workers, pin_memory=True, shuffle=True, drop_last=True)
-    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, collate_fn=collate_fn, num_workers=args.num_workers, pin_memory=True, shuffle=False, drop_last=False)
-
-    # data_loader = DataLoader(train_dataset, batch_size=2, collate_fn=collate_fn, num_workers=2, pin_memory=True, shuffle=True)
-    # iters = iter(data_loader)
-    # feat, target = next(iters)
-
-    # print(f"target[0]['semantic_labels']:{target[0]['semantic_labels']}")
-    # print(f"target[0]['segments']:{target[0]['segments']}")
-    # print(f"target[0]['labels']:{target[0]['labels']}")
-    # print(f"target[0]['label_names']:{target[0]['label_names']}")
-    # print(f"target[0]['salient_mask']:{target[0]['salient_mask']}")
-    # print(f"self.classes:{data_loader.dataset.classes}")
-    for idx, (samples, targets) in enumerate(train_loader):
-        if idx==0:
-            print(f"first epoch, the targets[0]['segments]:{targets[0]['segments']}")
-
-    # for samples, targets in val_loader:
-    #     pass
-    for idx, (samples, targets) in enumerate(train_loader):
-        if idx==0:
-            print(f"second epoch, the targets[0]['segments]:{targets[0]['segments']}")
-
-# CUDA_VISIBLE_DEVICES=4 python dataset.py --cfg_path "./config/Thumos14_CLIP_8frame.yaml"
